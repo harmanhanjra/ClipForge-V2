@@ -126,31 +126,40 @@ def apply_copyright_filters(input_path, output_path, options):
         
     # Write to a temporary file
     temp_video = output_path + ".temp.mp4"
-    clip.write_videofile(
-        temp_video,
-        codec="libx264",
-        audio_codec="aac",
-        fps=30,
-        logger=None
-    )
-    clip.close()
-    
+    try:
+        clip.write_videofile(
+            temp_video,
+            codec="libx264",
+            audio_codec="aac",
+            fps=30,
+            logger=None
+        )
+    except Exception as write_err:
+        print(f"[VideoEffects] write_videofile failed: {write_err}")
+        clip.close()
+        raise RuntimeError(f"Video processing failed: {write_err}")
+    finally:
+        clip.close()
+
+    if not os.path.exists(temp_video) or os.path.getsize(temp_video) == 0:
+        raise RuntimeError(f"Video processing produced no output for {output_path}")
+
     # 4. Audio Pitch Shifting (if we want to preserve and pitch-shift the audio)
     pitch_semitones = float(options.get("pitch_shift", 0.8))
-    if pitch_semitones != 0.0 and os.path.exists(temp_video):
+    if pitch_semitones != 0.0:
         # Extract audio from temp video
         temp_audio = output_path + ".temp.wav"
         temp_shifted_audio = output_path + ".shifted.wav"
-        
+
         # Extract command
         extract_cmd = ["ffmpeg", "-y", "-i", temp_video, "-vn", "-acodec", "pcm_s16le", temp_audio]
         subprocess.run(extract_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
+
         if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
             try:
                 # Apply pitch shift
                 pitch_shift_audio(temp_audio, temp_shifted_audio, pitch_semitones)
-                
+
                 # Combine shifted audio back to the temp video
                 combine_cmd = [
                     "ffmpeg", "-y", "-i", temp_video, "-i", temp_shifted_audio,
@@ -161,21 +170,25 @@ def apply_copyright_filters(input_path, output_path, options):
                 print(f"Error shifting audio pitch: {e}. Falling back to normal audio.")
                 if os.path.exists(output_path):
                     os.remove(output_path)
-                os.rename(temp_video, output_path)
+                import shutil
+                shutil.copy2(temp_video, output_path)
             finally:
                 # Cleanup temp audio files
                 for f in [temp_audio, temp_shifted_audio]:
                     if os.path.exists(f):
                         os.remove(f)
         else:
-            # Video might have no audio
-            os.rename(temp_video, output_path)
+            # Video might have no audio — just copy temp to output
+            import shutil
+            shutil.copy2(temp_video, output_path)
     else:
-        os.rename(temp_video, output_path)
-        
+        import shutil
+        shutil.copy2(temp_video, output_path)
+
     # Cleanup temp video
     if os.path.exists(temp_video):
         os.remove(temp_video)
+
 
 def slice_video(input_path, output_dir, mode="auto", intervals=8, custom_ranges=None):
     """
