@@ -245,49 +245,63 @@ def clip_youtube_video():
         ytdlp_bin = get_pip_binary('yt-dlp')
         
         print(f"Downloading video from {url}...")
+
+        # Check if curl-cffi is available for --impersonate support
+        try:
+            import curl_cffi
+            has_curl_cffi = True
+        except ImportError:
+            has_curl_cffi = False
+
         download_cmd = [
             ytdlp_bin,
             # Quality: max 720p
             "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "--merge-output-format", "mp4",
-            # TLS fingerprint spoofing — impersonate a real Chrome browser at network level
-            # This is much more effective than just setting User-Agent headers
-            "--impersonate", "chrome",
-            # Use tv_embedded player client — bypasses datacenter IP blocking
-            # tv_embedded is used for embedded YouTube players and has looser restrictions
-            "--extractor-args", "youtube:player_client=tv_embedded,ios,android",
+            # Player client: ios/android work for most videos without embedding restrictions
+            # tv_embedded is intentionally excluded — it fails for non-embeddable videos
+            "--extractor-args", "youtube:player_client=ios,android,mweb,web",
             # Geo-bypass
             "--geo-bypass",
-            # SSL resilience  
+            # SSL resilience
             "--no-check-certificates",
             "--socket-timeout", "60",
             # Retry logic
-            "--retries", "15",
-            "--fragment-retries", "15",
-            "--retry-sleep", "exp=2:60",
-            "--sleep-requests", "2",
+            "--retries", "10",
+            "--fragment-retries", "10",
+            "--retry-sleep", "exp=1:30",
             # Output
             "-o", raw_download_path,
             url
         ]
-        
+
+        # Only add --impersonate if curl-cffi is installed
+        if has_curl_cffi:
+            download_cmd.insert(3, "chrome")
+            download_cmd.insert(3, "--impersonate")
+
         result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=480)
         stderr_text = result.stderr.decode('utf-8', errors='ignore')
         
         if result.returncode != 0 or not os.path.exists(raw_download_path) or os.path.getsize(raw_download_path) == 0:
-            if 'SSL' in stderr_text or 'EOF' in stderr_text or 'network' in stderr_text.lower():
-                err = 'YouTube is blocking server downloads. This is a YouTube restriction on server/datacenter IPs. Try: 1) A less popular/unlisted video, 2) A short clip under 3 min.'
+            # Check impersonation error FIRST before generic "unavailable"
+            if 'impersonate' in stderr_text.lower() or ('curl' in stderr_text.lower() and 'cffi' in stderr_text.lower()):
+                err = 'Browser impersonation library missing. Try again (it will retry without impersonation).'
+            elif 'SSL' in stderr_text or 'EOF' in stderr_text:
+                err = 'YouTube SSL error. Try a different video or try again in a few seconds.'
             elif 'Private' in stderr_text or 'members-only' in stderr_text:
-                err = 'This video is private or members-only. Only public videos can be downloaded.'
+                err = 'This video is private or members-only.'
+            elif 'Sign in' in stderr_text:
+                err = 'YouTube requires sign-in for this video. Try a fully public video.'
             elif 'removed' in stderr_text or 'unavailable' in stderr_text or 'not available' in stderr_text:
                 err = 'This video is unavailable or has been removed from YouTube.'
-            elif 'Sign in' in stderr_text or 'bot' in stderr_text.lower():
-                err = 'YouTube detected bot activity. Try a different less-popular public video.'
-            elif 'impersonate' in stderr_text.lower() or 'curl' in stderr_text.lower():
-                err = 'Browser impersonation not available. Retrying without it — please try again.'
+            elif 'bot' in stderr_text.lower() or 'detected' in stderr_text.lower():
+                err = 'YouTube detected bot activity. Try a different video.'
             else:
-                err = stderr_text[-600:] if stderr_text else 'Unknown download error'
+                # Show raw error so we can diagnose
+                err = f'yt-dlp error: {stderr_text[-800:]}' if stderr_text else 'Unknown download error'
             return jsonify({'success': False, 'error': f'Download failed: {err}'}), 500
+
             
         # 2. Slice downloaded video
         temp_clips_dir = os.path.join(UPLOAD_FOLDER, f"{job_id}_slices")
