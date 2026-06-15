@@ -243,9 +243,17 @@ def generate_speech(text: str, voice: str, output_path: str,
             lang = parts[1]
             gender = parts[2]
             return generate_speech_gtts(text, lang, output_path, gender, rate, pitch)
-            
-        asyncio.run(_tts_async(text, voice, output_path,
-                                rate, pitch, style, style_degree))
+
+        # Use a fresh event loop to avoid conflicts with gunicorn threads
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_tts_async(text, voice, output_path,
+                                               rate, pitch, style, style_degree))
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
+
         return os.path.exists(output_path) and os.path.getsize(output_path) > 0
     except Exception as e:
         print(f"[TTS Error] {e}")
