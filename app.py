@@ -247,38 +247,44 @@ def clip_youtube_video():
         print(f"Downloading video from {url}...")
         download_cmd = [
             ytdlp_bin,
-            # Quality: limit to 720p to reduce size and improve reliability
+            # Quality: max 720p for reliability and speed
             "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "--merge-output-format", "mp4",
-            # Browser spoofing to bypass YouTube bot detection on server IPs
-            "--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "--extractor-args", "youtube:player_client=web,web_creator",
-            # SSL and network resilience
+            # Use iOS player client — bypasses YouTube's datacenter IP blocking
+            # ios/android clients are not subject to the same bot detection as web
+            "--extractor-args", "youtube:player_client=ios,android,web",
+            # Geo-bypass
+            "--geo-bypass",
+            # SSL resilience
             "--no-check-certificates",
-            "--socket-timeout", "30",
+            "--socket-timeout", "60",
+            # Headers to look like a real browser
+            "--add-header", "Accept-Language:en-US,en;q=0.9",
             # Retry logic
-            "--retries", "10",
-            "--fragment-retries", "10",
-            "--retry-sleep", "exp=1:120",
+            "--retries", "15",
+            "--fragment-retries", "15",
+            "--retry-sleep", "exp=2:60",
+            "--sleep-requests", "1",
             # Output
             "-o", raw_download_path,
             url
         ]
         
-        result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+        result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=480)
         stderr_text = result.stderr.decode('utf-8', errors='ignore')
         stdout_text = result.stdout.decode('utf-8', errors='ignore')
         
         if result.returncode != 0 or not os.path.exists(raw_download_path) or os.path.getsize(raw_download_path) == 0:
-            # Give a clean user-friendly error
-            if 'SSL' in stderr_text or 'EOF' in stderr_text:
-                err = 'YouTube blocked this download from the server. Try a different video or use a shorter/public video.'
+            if 'SSL' in stderr_text or 'EOF' in stderr_text or 'network' in stderr_text.lower():
+                err = 'YouTube is blocking server downloads. Please try: 1) A different video, 2) A shorter clip (<5 min), 3) An unlisted video.'
             elif 'Private video' in stderr_text or 'members-only' in stderr_text:
-                err = 'This video is private or members-only.'
-            elif 'removed' in stderr_text or 'unavailable' in stderr_text:
-                err = 'This video is unavailable or has been removed.'
+                err = 'This video is private or members-only. Only public videos can be downloaded.'
+            elif 'removed' in stderr_text or 'unavailable' in stderr_text or 'not available' in stderr_text:
+                err = 'This video is unavailable or has been removed from YouTube.'
+            elif 'Sign in' in stderr_text or 'bot' in stderr_text.lower():
+                err = 'YouTube requires sign-in or detected bot activity. Try a different public video.'
             else:
-                err = stderr_text[-500:] if stderr_text else 'Unknown download error'
+                err = stderr_text[-600:] if stderr_text else 'Unknown download error'
             return jsonify({'success': False, 'error': f'Download failed: {err}'}), 500
             
         # 2. Slice downloaded video
