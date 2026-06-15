@@ -247,16 +247,39 @@ def clip_youtube_video():
         print(f"Downloading video from {url}...")
         download_cmd = [
             ytdlp_bin,
-            "-f", "bestvideo+bestaudio/best",
+            # Quality: limit to 720p to reduce size and improve reliability
+            "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "--merge-output-format", "mp4",
+            # Browser spoofing to bypass YouTube bot detection on server IPs
+            "--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "--extractor-args", "youtube:player_client=web,web_creator",
+            # SSL and network resilience
+            "--no-check-certificates",
+            "--socket-timeout", "30",
+            # Retry logic
+            "--retries", "10",
+            "--fragment-retries", "10",
+            "--retry-sleep", "exp=1:120",
+            # Output
             "-o", raw_download_path,
             url
         ]
         
-        result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode != 0 or not os.path.exists(raw_download_path):
-            error_msg = result.stderr.decode('utf-8', errors='ignore')
-            return jsonify({'success': False, 'error': f"Failed to download YouTube video: {error_msg}"}), 500
+        result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+        stderr_text = result.stderr.decode('utf-8', errors='ignore')
+        stdout_text = result.stdout.decode('utf-8', errors='ignore')
+        
+        if result.returncode != 0 or not os.path.exists(raw_download_path) or os.path.getsize(raw_download_path) == 0:
+            # Give a clean user-friendly error
+            if 'SSL' in stderr_text or 'EOF' in stderr_text:
+                err = 'YouTube blocked this download from the server. Try a different video or use a shorter/public video.'
+            elif 'Private video' in stderr_text or 'members-only' in stderr_text:
+                err = 'This video is private or members-only.'
+            elif 'removed' in stderr_text or 'unavailable' in stderr_text:
+                err = 'This video is unavailable or has been removed.'
+            else:
+                err = stderr_text[-500:] if stderr_text else 'Unknown download error'
+            return jsonify({'success': False, 'error': f'Download failed: {err}'}), 500
             
         # 2. Slice downloaded video
         temp_clips_dir = os.path.join(UPLOAD_FOLDER, f"{job_id}_slices")
