@@ -168,13 +168,14 @@ def merge_videos():
         # Mix audio tracks if we have speech or background music
         if speech_path or bg_music_path:
             mixed_audio = os.path.join(UPLOAD_FOLDER, f"{job_id}_mixed.mp3")
-            final_audio_path = create_mixed_audio(
-                speech_path=speech_path,
+            ok = create_mixed_audio(
+                voiceover_path=speech_path,
                 bg_music_path=bg_music_path,
                 target_duration=duration,
-                output_path=mixed_audio,
-                trim_to_video=trim_audio
+                output_path=mixed_audio
             )
+            if ok and os.path.exists(mixed_audio):
+                final_audio_path = mixed_audio
             
         # 3. Combine merged video and final audio
         output_filename = f"merged_{job_id[:8]}.mp4"

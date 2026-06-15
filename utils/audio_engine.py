@@ -324,34 +324,38 @@ def extract_keyword(text: str) -> str:
 
 
 def get_font_for_lang(lang: str) -> str:
-    """Find a suitable system font for the language to handle non-English glyphs."""
+    """Find a suitable system font for the language to handle non-English glyphs.
+    Works on both macOS and Linux (Docker/HF Spaces).
+    """
+    # Linux (Docker) font paths — installed via apt fonts-dejavu-core, fonts-liberation
+    linux_unicode = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    # macOS font paths — fallback when running locally
+    macos_unicode = [
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+    ]
+
+    # Try language-specific paths first (Linux then macOS)
+    lang_paths = []
     if lang.startswith("pa"):
-        paths = [
+        lang_paths = [
             "/System/Library/Fonts/Supplemental/Gurmukhi MN.ttc",
-            "/System/Library/Fonts/Supplemental/Gurmukhi Sangam MN.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
         ]
     elif lang.startswith("hi"):
-        paths = [
+        lang_paths = [
             "/System/Library/Fonts/Supplemental/DevanagariMT.ttc",
-            "/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
         ]
-    elif lang.startswith("ur"):
-        paths = [
-            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-            "/System/Library/Fonts/Supplemental/Arial.ttf"
-        ]
-    else:
-        paths = [
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Supplemental/Arial.ttf"
-        ]
-        
-    for p in paths:
+
+    for p in lang_paths + linux_unicode + macos_unicode:
         if os.path.exists(p):
             return p
-    return "Arial"
+    return "DejaVuSans"  # Last resort — PIL will try to find it
 
 
 def make_ken_burns_frame(img_obj, target_w, target_h, t, duration, zoom_ratio=0.12):
