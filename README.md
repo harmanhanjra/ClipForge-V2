@@ -6,7 +6,7 @@ colorTo: purple
 sdk: docker
 pinned: false
 license: mit
-short_description: Unlimited Free Voice generation, video generation and Anti copyright yt
+short_description: Free voice gen, video gen & anti-copyright yt
 ---
 
 # 🚀 Jigarzzz❤️ — Premium Video Suite
