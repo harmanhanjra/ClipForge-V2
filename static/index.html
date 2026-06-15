@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jigarzzz❤️ – Premium Video Suite</title>
+    <meta name="description" content="AI-powered video merger, voiceover generator, and YouTube safe clipper. Free & professional.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=9">
+    <style>
+        /* ── Progress Bar ── */
+        .progress-bar-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 16px;
+            padding: 16px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(0,242,254,0.15);
+            border-radius: var(--r-md);
+            animation: fadeSlideUp 0.3s ease;
+        }
+        .progress-bar-wrap.visible { display: flex; }
+        .progress-bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .progress-status {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--primary);
+            animation: pulse-glow 1.1s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+            0%,100% { opacity:1; transform:scale(1); }
+            50%      { opacity:0.4; transform:scale(0.65); }
+        }
+        .progress-pct {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .progress-track {
+            height: 6px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--grad-primary);
+            border-radius: 99px;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 10px rgba(0,242,254,0.5);
+        }
+        .progress-step-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Stats Strip ── */
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--r-lg);
+            padding: 16px 18px;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            transition: all var(--t-fast);
+        }
+        .stat-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-bright);
+            transform: translateY(-2px);
+        }
+        .stat-icon-wrap {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1.2rem;
+        }
+        .stat-icon-wrap.cyan  { background: rgba(0,242,254,0.1); }
+        .stat-icon-wrap.pink  { background: rgba(244,114,182,0.1); }
+        .stat-icon-wrap.purple{ background: rgba(167,139,250,0.1); }
+        .stat-info { display: flex; flex-direction: column; gap: 2px; }
+        .stat-value { font-size: 1.4rem; font-weight: 900; color: #fff; line-height: 1; }
+        .stat-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.3px; }
+
+        /* ── Badge chip ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0,242,254,0.08);
+            border: 1px solid rgba(0,242,254,0.2);
+            color: var(--primary);
+            font-size: 0.71rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: var(--r-full);
+            letter-spacing: 0.4px;
+        }
+        .badge.red   { background: rgba(255,45,85,0.08); border-color: rgba(255,45,85,0.25); color: #ff6b8a; }
+        .badge.green { background: rgba(56,239,125,0.08); border-color: rgba(56,239,125,0.25); color: #38ef7d; }
+
+        /* ── File count pill ── */
+        .file-count-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0,242,254,0.1);
+            color: var(--primary);
+            border-radius: var(--r-full);
+            padding: 3px 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* ── Two-column ratio grid for clipper ── */
+        .ratio-3col { grid-template-columns: repeat(3,1fr) !important; }
+
+        /* ── Output file size info ── */
+        .output-info {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        /* ── Scrollable library ── */
+        .library-empty-art { font-size: 2.8rem; opacity: 0.18; line-height: 1; }
+
+        /* ── Gradient border input ── */
+        .url-input-wrap { position: relative; }
+        .url-input-wrap input {
+            padding-left: 44px;
+        }
+        .url-input-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Ambient Glow Orbs -->
+    <div class="glow-bg"></div>
+    <div class="glow-bg-secondary"></div>
+
+    <div class="app-container">
+
+        <!-- ═══════════════════════════════════════════
+             HEADER
+        ════════════════════════════════════════════ -->
+        <header class="app-header">
+            <div class="logo">
+                <div class="rocket-container">
+                    <span class="fire-flame">🔥</span>
+                    <span class="rocket">🚀</span>
+                </div>
+                <div>
+                    <h1>Jigarzzz<span class="heart-red">❤️</span></h1>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:1px; font-weight:500; letter-spacing:0.3px;">Premium Video Suite</div>
+                </div>
+            </div>
+            <div class="eyecatchy-header">
+                <span>Unlimited Free Voice generation, video generation and Anti copyright yt</span>
+            </div>
+        </header>
+
+        <!-- ═══════════════════════════════════════════
+             STATS STRIP
+        ════════════════════════════════════════════ -->
+        <div class="hero-stats">
+            <div class="stat-card">
+                <div class="stat-icon-wrap cyan">🎬</div>
+                <div class="stat-info">
+                    <span class="stat-value" id="stat-files">0</span>
+                    <span class="stat-label">Files Exported</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon-wrap pink">🎙️</div>
+                <div class="stat-info">
+                    <span class="stat-value" id="stat-clips">0</span>
+                    <span class="stat-label">YT Clips Created</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon-wrap purple">🔊</div>
+                <div class="stat-info">
+                    <span class="stat-value" id="stat-audio">0</span>
+                    <span class="stat-label">Audio Tracks Mixed</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════
+             MAIN WORKSPACE
+        ════════════════════════════════════════════ -->
+        <div class="workspace-grid">
+
+            <!-- ── LEFT: Controls Panel ── -->
+            <main class="controls-panel">
+                <!-- Navigation Tabs -->
+                <div class="tabs-nav">
+                    <button class="tab-btn active" data-tab="merger-tab" id="tab-merger">
+                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h6"/>
+                        </svg>
+                        Video Merger &amp; Overlay
+                    </button>
+                    <button class="tab-btn" data-tab="clipper-tab" id="tab-clipper">
+                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        YouTube Safe Clipper
+                    </button>
+                    <button class="tab-btn" data-tab="ai-creator-tab" id="tab-ai-creator">
+                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: #a855f7;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L5.05 15.15a2 2 0 00-1.022.547l-1.39 1.39a1 1 0 00.707 1.707h16.31a1 1 0 00.707-1.707l-1.39-1.39zM12 2v4M12 6L9.5 8.5M12 6l2.5 2.5"/>
+                        </svg>
+                        🪄 AI Video Creator
+                    </button>
+                </div>
+
+                <!-- ═══════════════════════════════════
+                     TAB 1 – VIDEO MERGER
+                ════════════════════════════════════ -->
+                <div id="merger-tab" class="tab-content active">
+                    <form id="merge-form">
+
+                        <!-- Step 1: Upload Clips -->
+                        <div class="input-section">
+                            <h3 class="section-title">
+                                1. Upload Clips
+                                <span class="file-count-pill" id="video-count-pill" style="display:none">0 files</span>
+                            </h3>
+                            <p class="section-desc">Select any number of video clips — varying durations supported.</p>
+
+                            <div class="dropzone" id="video-dropzone">
+                                <input type="file" id="videos" name="videos" multiple accept="video/*" class="file-input">
+                                <svg class="dropzone-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                <span>Drag &amp; drop clips or <strong>browse files</strong></span>
+                                <span style="font-size:0.73rem; opacity:0.5;">MP4, MOV, AVI, MKV — any length</span>
+                            </div>
+                            <div id="video-queue" class="file-queue"></div>
+                        </div>
+
+                        <!-- Step 2: Aspect Ratio -->
+                        <div class="input-section">
+                            <h3 class="section-title">2. Output Format</h3>
+                            <div class="ratio-options">
+                                <label class="ratio-card">
+                                    <input type="radio" name="aspect_ratio" value="vertical" checked>
+                                    <div class="ratio-box vertical-box"></div>
+                                    <span class="ratio-label">Vertical (9:16)<small>Shorts · Reels · TikTok</small></span>
+                                </label>
+                                <label class="ratio-card">
+                                    <input type="radio" name="aspect_ratio" value="horizontal">
+                                    <div class="ratio-box horizontal-box"></div>
+                                    <span class="ratio-label">Horizontal (16:9)<small>YouTube · Standard</small></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Audio -->
+                        <div class="input-section">
+                            <h3 class="section-title">3. Audio Overlay</h3>
+
+                            <div class="audio-toggle-container">
+                                <button type="button" class="toggle-btn active" data-type="script" id="audio-toggle-script">🎙️ Generate TTS</button>
+                                <button type="button" class="toggle-btn" data-type="upload" id="audio-toggle-upload">📁 Upload Audio File</button>
+                                <button type="button" class="toggle-btn" data-type="none" id="audio-toggle-none">🚫 No Audio</button>
+                            </div>
+
+                            <!-- TTS Sub-Panel -->
+                            <div id="tts-panel" class="sub-panel active">
+                                <div class="form-group">
+                                    <label for="script_text">Voiceover Script</label>
+                                    <textarea id="script_text" name="script_text"
+                                        placeholder="Type Urdu or English script... (e.g. 'آج ہم بات کریں گے...' or 'Welcome to our channel!')"></textarea>
+                                </div>
+
+                                <!-- Language + Voice Row -->
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="tts-language">Language</label>
+                                        <select id="tts-language">
+                                            <option value="ur-PK" selected>🇵🇰 Urdu (Pakistan)</option>
+                                            <option value="ur-IN">🕊️ Punjabi / Urdu (India) — Gul & Salman</option>
+                                            <option value="hi-IN">🇮🇳 Hindi (India)</option>
+                                            <option value="pa-IN">🌾 Punjabi (India) — Native</option>
+                                            <option value="en-US">🇺🇸 English (US)</option>
+                                            <option value="en-GB">🇬🇧 English (UK)</option>
+                                            <option value="en-AU">🇦🇺 English (Australian)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="tts-voice">Voice Character</label>
+                                        <div class="voice-picker-wrap">
+                                            <select id="tts-voice" name="voice">
+                                                <!-- Filled dynamically -->
+                                            </select>
+                                            <button type="button" class="preview-voice-btn" id="preview-voice-btn" title="Hear this voice">
+                                                ▶ Preview
+                                            </button>
+                                        </div>
+                                        <!-- Live preview player -->
+                                        <div class="voice-preview-player" id="voice-preview-player" style="display:none">
+                                            <audio id="preview-audio" controls style="width:100%;margin-top:8px;"></audio>
+                                            <span class="preview-label">🎧 Sample — adjust mood &amp; re-preview to compare</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Mood / Style Grid -->
+                                <div class="form-group" id="mood-group">
+                                    <label>🎭 Mood &amp; Style &nbsp;<span class="mood-support-tag" id="tts-mood-support-tag"></span></label>
+                                    <div class="mood-grid" id="tts-mood-grid">
+                                        <!-- Filled dynamically by JS -->
+                                    </div>
+                                </div>
+
+                                <!-- Speed + Pitch Sliders -->
+                                <div class="form-row sliders-row">
+                                    <div class="form-group slider-group">
+                                        <label>🚀 Speed &nbsp;<span class="slider-val" id="tts-rate-val">Normal</span></label>
+                                        <input type="range" id="tts-rate-slider" min="-50" max="50" value="0" step="5" class="style-slider">
+                                        <div class="slider-marks"><span>Slow</span><span>Normal</span><span>Fast</span></div>
+                                    </div>
+                                    <div class="form-group slider-group">
+                                        <label>🎵 Pitch &nbsp;<span class="slider-val" id="tts-pitch-val">Normal</span></label>
+                                        <input type="range" id="tts-pitch-slider" min="-200" max="200" value="0" step="10" class="style-slider">
+                                        <div class="slider-marks"><span>Low</span><span>Normal</span><span>High</span></div>
+                                    </div>
+                                </div>
+
+                                <!-- Age Group Selector -->
+                                <div class="form-group" id="age-group">
+                                    <label>🧑 Voice Age <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">— adjusts pitch & speed to simulate age</span></label>
+                                    <div class="age-grid" id="tts-age-grid">
+                                        <!-- Filled dynamically by JS -->
+                                    </div>
+                                </div>
+
+                                <!-- Hidden fields passed to /api/merge -->
+                                <input type="hidden" id="tts-style" name="style" value="">
+                                <input type="hidden" id="tts-style-degree" name="style_degree" value="1.0">
+                                <input type="hidden" id="tts-rate" name="rate" value="+0%">
+                                <input type="hidden" id="tts-pitch" name="pitch" value="+0Hz">
+                            </div>
+
+                            <!-- Upload Audio Sub-Panel -->
+                            <div id="audio-upload-panel" class="sub-panel">
+                                <div class="form-group">
+                                    <label for="audio_file">Audio File (MP3 / WAV / M4A)</label>
+                                    <input type="file" id="audio_file" name="audio_file" accept="audio/*">
+                                </div>
+                            </div>
+
+                            <!-- No Audio Sub-Panel -->
+                            <div id="no-audio-panel" class="sub-panel">
+                                <p style="font-size:0.83rem; color:var(--text-muted); padding:12px 0;">No audio overlay will be added. Videos will be merged as-is.</p>
+                            </div>
+
+                            <!-- Background Music (Optional) -->
+                            <div class="optional-group">
+                                <div class="form-group">
+                                    <label for="bg_music_file">🎵 Background Music <span style="opacity:0.5; font-weight:400">(optional — mixed at 15% vol)</span></label>
+                                    <input type="file" id="bg_music_file" name="bg_music_file" accept="audio/*">
+                                </div>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" name="trim_audio" value="true" checked>
+                                        <span class="checkmark"></span>
+                                        Auto-trim audio to match total video duration
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-bar-wrap" id="merge-progress">
+                            <div class="progress-bar-header">
+                                <span class="progress-status"><span class="pulse-dot"></span> Processing…</span>
+                                <span class="progress-pct" id="merge-pct">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="merge-fill"></div>
+                            </div>
+                            <span class="progress-step-text" id="merge-step">Initialising…</span>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="merge-submit-btn">
+                            <span class="btn-text">🎬 Generate Merged Video</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- ═══════════════════════════════════
+                     TAB 2 – YOUTUBE CLIPPER
+                ════════════════════════════════════ -->
+                <div id="clipper-tab" class="tab-content">
+                    <form id="clip-form">
+
+                        <!-- Step 1: YouTube URL -->
+                        <div class="input-section">
+                            <h3 class="section-title">1. YouTube Video URL</h3>
+                            <div class="form-group">
+                                <div class="url-input-wrap">
+                                    <svg class="url-input-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                    </svg>
+                                    <input type="text" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Aspect Ratio -->
+                        <div class="input-section">
+                            <h3 class="section-title">2. Output Format</h3>
+                            <p class="section-desc">Keep original or crop to a target platform ratio.</p>
+                            <div class="ratio-options ratio-3col">
+                                <label class="ratio-card">
+                                    <input type="radio" name="aspect_ratio" value="original" checked>
+                                    <div class="ratio-box" style="width:42px;height:28px;border:2px dashed rgba(255,255,255,0.2);border-radius:4px;"></div>
+                                    <span class="ratio-label">Original<small>No Crop</small></span>
+                                </label>
+                                <label class="ratio-card">
+                                    <input type="radio" name="aspect_ratio" value="vertical">
+                                    <div class="ratio-box vertical-box"></div>
+                                    <span class="ratio-label">Vertical (9:16)<small>Shorts · Reels</small></span>
+                                </label>
+                                <label class="ratio-card">
+                                    <input type="radio" name="aspect_ratio" value="horizontal">
+                                    <div class="ratio-box horizontal-box"></div>
+                                    <span class="ratio-label">Horizontal (16:9)<small>YouTube · Standard</small></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Slicing Mode -->
+                        <div class="input-section">
+                            <h3 class="section-title">3. Slicing Method</h3>
+                            <div class="audio-toggle-container">
+                                <button type="button" class="toggle-btn active" data-type="auto" id="clip-toggle-auto">⚡ Auto-Split</button>
+                                <button type="button" class="toggle-btn" data-type="timestamps" id="clip-toggle-ts">🕐 Custom Timestamps</button>
+                            </div>
+
+                            <!-- Auto Split Panel -->
+                            <div id="auto-clip-panel" class="sub-panel active">
+                                <div class="form-group inline-group">
+                                    <label for="interval">Clip Duration per Segment:</label>
+                                    <div class="number-input">
+                                        <input type="number" id="interval" name="interval" value="30" min="1" max="1800">
+                                        <span>seconds</span>
+                                    </div>
+                                </div>
+                                <small class="help-text" style="display:block; margin-top:4px;">Each segment will be exactly this many seconds long.</small>
+                            </div>
+
+                            <!-- Custom Timestamps Panel -->
+                            <div id="timestamps-clip-panel" class="sub-panel">
+                                <div class="form-group">
+                                    <label for="timestamps">Timestamp Ranges (seconds)</label>
+                                    <input type="text" id="timestamps" name="timestamps" placeholder="e.g. 10-40, 55-85, 120-150">
+                                    <small class="help-text">Format: start-end pairs, comma-separated</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Safety Filters -->
+                        <div class="input-section">
+                            <h3 class="section-title">4. Safety Filters <span class="badge red" style="margin-left:6px; vertical-align:middle;">Anti-Copyright</span></h3>
+                            <p class="section-desc">Applies transformations to evade automated content matching.</p>
+
+                            <div class="filters-grid">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" name="mirror" value="true" checked>
+                                    <span class="checkmark"></span>
+                                    ↔ Horizontal Flip
+                                </label>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" name="zoom" value="true" checked>
+                                    <span class="checkmark"></span>
+                                    🔍 Edge Crop &amp; Zoom (1.05x)
+                                </label>
+                            </div>
+
+                            <div class="form-row" style="margin-top:16px;">
+                                <div class="form-group">
+                                    <label for="speed">Video Speed</label>
+                                    <select id="speed" name="speed">
+                                        <option value="1.0">Standard (1.0×)</option>
+                                        <option value="1.04" selected>Safe Speed-up (1.04×)</option>
+                                        <option value="1.08">Fast Speed-up (1.08×)</option>
+                                        <option value="0.95">Slight Slow-down (0.95×)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pitch_shift">Audio Pitch Shift</label>
+                                    <select id="pitch_shift" name="pitch_shift">
+                                        <option value="0.0">Normal Pitch (0.0)</option>
+                                        <option value="0.8" selected>Slight High (+0.8)</option>
+                                        <option value="1.5">High Pitch (+1.5)</option>
+                                        <option value="-0.8">Slight Low (-0.8)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-bar-wrap" id="clip-progress">
+                            <div class="progress-bar-header">
+                                <span class="progress-status"><span class="pulse-dot"></span> Processing…</span>
+                                <span class="progress-pct" id="clip-pct">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="clip-fill"></div>
+                            </div>
+                            <span class="progress-step-text" id="clip-step">Downloading video…</span>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="clip-submit-btn"
+                                style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); box-shadow: 0 6px 30px rgba(245,87,108,0.35);">
+                            <span class="btn-text">✂️ Download &amp; Create Clips</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- ═══════════════════════════════════
+                     TAB 3 – AI VIDEO CREATOR
+                ════════════════════════════════════ -->
+                <div id="ai-creator-tab" class="tab-content">
+                    <form id="ai-video-form">
+                        
+                        <!-- Step 1: Script Text -->
+                        <div class="input-section">
+                            <h3 class="section-title">1. Write Video Script</h3>
+                            <p class="section-desc">Type your story or narration script. Each sentence will generate an animated visual slide matched to the voiceover.</p>
+                            <div class="form-group">
+                                <textarea id="ai_script_text" name="script_text" required style="min-height:120px;"
+                                    placeholder="e.g. Space is a mysterious place full of wonders. Today, we explore the secrets of distant galaxies. Stay with us!"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Format & Theme -->
+                        <div class="input-section">
+                            <h3 class="section-title">2. Choose Theme &amp; Style</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="ai_theme">Visual Theme / Imagery</label>
+                                    <select id="ai_theme" name="theme">
+                                        <option value="ai_generative" selected>🤖 AI Video Gen (Flux/Sora Style)</option>
+                                        <option value="auto">🔍 Auto-Keyword Match</option>
+                                        <option value="space">🌌 Space &amp; Cosmos</option>
+                                        <option value="tech">💻 Technology &amp; Cyberpunk</option>
+                                        <option value="nature">🌿 Nature &amp; Landscape</option>
+                                        <option value="finance">📈 Finance &amp; Wealth</option>
+                                        <option value="city">🏙️ Modern City &amp; Urban</option>
+                                        <option value="abstract">🎨 Abstract &amp; Gradients</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Aspect Ratio</label>
+                                    <div class="ratio-options" style="margin-top:4px;">
+                                        <label class="ratio-card small-card">
+                                            <input type="radio" name="aspect_ratio" value="vertical" checked>
+                                            <div class="ratio-box vertical-box"></div>
+                                            <span class="ratio-label">Vertical (9:16)</span>
+                                        </label>
+                                        <label class="ratio-card small-card">
+                                            <input type="radio" name="aspect_ratio" value="horizontal">
+                                            <div class="ratio-box horizontal-box"></div>
+                                            <span class="ratio-label">Horizontal (16:9)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Voiceover -->
+                        <div class="input-section">
+                            <h3 class="section-title">3. Narration Voiceover</h3>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="ai-language">Language</label>
+                                    <select id="ai-language" name="language">
+                                        <!-- Filled dynamically -->
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ai-voice">Voice Character</label>
+                                    <div class="voice-picker-wrap">
+                                        <select id="ai-voice" name="voice">
+                                            <!-- Filled dynamically -->
+                                        </select>
+                                        <button type="button" class="preview-voice-btn" id="ai-preview-voice-btn" title="Hear this voice">
+                                            ▶ Preview
+                                        </button>
+                                    </div>
+                                    <!-- Live preview player -->
+                                    <div class="voice-preview-player" id="ai-voice-preview-player" style="display:none">
+                                        <audio id="ai-preview-audio" controls style="width:100%;margin-top:8px;"></audio>
+                                        <span class="preview-label">🎧 Sample — adjust settings &amp; re-preview</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Mood / Style Grid -->
+                            <div class="form-group" id="ai-mood-group">
+                                <label>🎭 Mood &amp; Style &nbsp;<span class="mood-support-tag" id="ai-mood-support-tag"></span></label>
+                                <div class="mood-grid" id="ai-mood-grid">
+                                    <!-- Filled dynamically by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Speed + Pitch Sliders -->
+                            <div class="form-row sliders-row">
+                                <div class="form-group slider-group">
+                                    <label>🚀 Speed &nbsp;<span class="slider-val" id="ai-rate-val">Normal</span></label>
+                                    <input type="range" id="ai-rate-slider" min="-50" max="50" value="0" step="5" class="style-slider">
+                                    <div class="slider-marks"><span>Slow</span><span>Normal</span><span>Fast</span></div>
+                                </div>
+                                <div class="form-group slider-group">
+                                    <label>🎵 Pitch &nbsp;<span class="slider-val" id="ai-pitch-val">Normal</span></label>
+                                    <input type="range" id="ai-pitch-slider" min="-200" max="200" value="0" step="10" class="style-slider">
+                                    <div class="slider-marks"><span>Low</span><span>Normal</span><span>High</span></div>
+                                </div>
+                            </div>
+
+                            <!-- Age Group Selector -->
+                            <div class="form-group" id="ai-age-group">
+                                <label>🧑 Voice Age <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">— adjusts pitch & speed to simulate age</span></label>
+                                <div class="age-grid" id="ai-age-grid">
+                                    <!-- Filled dynamically by JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Background Music -->
+                        <div class="input-section">
+                            <h3 class="section-title">4. Background Music (Optional)</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="ai_bg_music_file">🎵 Background Music <span style="opacity:0.5; font-weight:400">(optional — mixed at 15% vol)</span></label>
+                                    <input type="file" id="ai_bg_music_file" name="bg_music_file" accept="audio/*">
+                                </div>
+                            </div>
+                            <div class="checkbox-group" style="margin-top:10px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" name="trim_audio" value="true" checked>
+                                    <span class="checkmark"></span>
+                                    Auto-trim audio to match total video duration
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-bar-wrap" id="ai-progress">
+                            <div class="progress-bar-header">
+                                <span class="progress-status"><span class="pulse-dot"></span> Generating AI Video…</span>
+                                <span class="progress-pct" id="ai-pct">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="ai-fill"></div>
+                            </div>
+                            <span class="progress-step-text" id="ai-step">Initialising…</span>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="ai-submit-btn" style="background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%); box-shadow: 0 6px 30px rgba(99,102,241,0.35);">
+                            <span class="btn-text">🪄 Create Complete AI Video</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        
+                        <!-- Hidden inputs -->
+                        <input type="hidden" id="ai-tts-style" name="style" value="">
+                        <input type="hidden" id="ai-tts-style-degree" name="style_degree" value="1.0">
+                        <input type="hidden" id="ai-tts-rate" name="rate" value="+0%">
+                        <input type="hidden" id="ai-tts-pitch" name="pitch" value="+0Hz">
+                    </form>
+                </div>
+            </main>
+
+            <!-- ── RIGHT: Media Library ── -->
+            <aside class="media-library">
+                <div class="library-header">
+                    <h2>📂 Exported Library</h2>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="clear-library-btn" id="clear-library-btn" title="Delete all exported files">
+                            🗑 Clear All
+                        </button>
+                        <button class="refresh-btn" id="refresh-gallery" title="Refresh">
+                            <svg class="refresh-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.22 8H18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search -->
+                <div class="form-group" style="margin-bottom:16px; position:relative; z-index:1;">
+                    <input type="text" id="library-search" placeholder="🔍  Search exported files…" style="font-size:0.83rem;">
+                </div>
+
+                <div class="library-list" id="gallery-container">
+                    <div class="empty-library">
+                        <div class="library-empty-art">🎞️</div>
+                        <span>No files exported yet.<br>Run a merge or clipping operation to begin.</span>
+                    </div>
+                </div>
+            </aside>
+
+        </div><!-- /workspace-grid -->
+
+        <!-- ══════════════════════════════════════════
+             VIDEO PLAYER MODAL
+        ═════════════════════════════════════════ -->
+        <div class="modal" id="video-modal">
+            <div class="modal-overlay" id="modal-close"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">▶ Video Playback</h3>
+                    <button class="close-btn" id="modal-close-btn">×</button>
+                </div>
+                <div class="modal-body">
+                    <video id="modal-player" controls></video>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast"></div>
+
+    </div><!-- /app-container -->
+
+    <script src="js/app.js?v=9"></script>
+</body>
+</html>
