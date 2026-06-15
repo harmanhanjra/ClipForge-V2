@@ -88,106 +88,89 @@ def pitch_shift_audio(input_audio_path, output_audio_path, semitones=0.8):
 
 def apply_copyright_filters(input_path, output_path, options):
     """
-    Applies visual and audio transformations to bypass copyright filters:
-    - Aspect Ratio adjustment (original, vertical 9:16, horizontal 16:9)
-    - Mirroring (horizontal flip)
-    - Slight cropping/zooming (e.g. 1.05x)
-    - Slight speed alteration
-    - Slight pitch shifting of original audio (if preserved)
+    Applies visual and audio transformations to bypass copyright filters.
+    Uses pure FFmpeg subprocess for reliability — no moviepy silent failures.
+
+    Filters applied:
+    - Aspect Ratio (vertical 9:16, horizontal 16:9, or original)
+    - Horizontal mirror (hflip)
+    - 5% center zoom-in (crop + scale)
+    - Speed adjustment (setpts + atempo)
+    - Audio pitch shift (asetrate + atempo correction)
     """
-    clip = VideoFileClip(input_path)
-    
-    # 0. Handle Aspect Ratio Conversion
-    aspect = options.get("aspect_ratio", "original")
-    if aspect == "vertical":
-        clip = crop_to_aspect_ratio(clip, 1080, 1920)
-    elif aspect == "horizontal":
-        clip = crop_to_aspect_ratio(clip, 1920, 1080)
-        
-    w, h = clip.size
-    
-    # 1. Visual Mirroring
-    if options.get("mirror", True):
-        clip = clip.fx(vfx.mirror_x)
-        
-    # 2. Slight Zoom / Crop (to dodge visual signature detection)
-    if options.get("zoom", True):
-        zoom_factor = 1.05
-        new_w, new_h = int(w / zoom_factor), int(h / zoom_factor)
-        x1, y1 = (w - new_w) // 2, (h - new_h) // 2
-        x2, y2 = x1 + new_w, y1 + new_h
-        clip = clip.crop(x1=x1, y1=y1, x2=x2, y2=y2)
-        clip = clip.resize(newsize=(w, h))
-        
-    # 3. Slight Speed Alteration (e.g., 1.04x speedup)
+    aspect       = options.get("aspect_ratio", "original")
+    do_mirror    = options.get("mirror", True)
+    do_zoom      = options.get("zoom", True)
     speed_factor = float(options.get("speed", 1.04))
+    pitch_semi   = float(options.get("pitch_shift", 0.8))
+
+    # ── Check if the source has an audio stream ──────────────────────
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=codec_name",
+         "-of", "default=noprint_wrappers=1:nokey=1", input_path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    has_audio = bool(probe.stdout.strip())
+
+    # ── Build video filter chain ──────────────────────────────────────
+    vf = []
+
+    if aspect == "vertical":
+        # Crop to 9:16 center, scale to 1080×1920
+        vf.append("scale=1080:1920:force_original_aspect_ratio=decrease,"
+                  "pad=1080:1920:-1:-1:color=black")
+    elif aspect == "horizontal":
+        vf.append("scale=1920:1080:force_original_aspect_ratio=decrease,"
+                  "pad=1920:1080:-1:-1:color=black")
+
+    if do_mirror:
+        vf.append("hflip")
+
+    if do_zoom:
+        # Scale up 5%, then crop center back to original size
+        vf.append("scale=iw*1.05:ih*1.05,crop=iw/1.05:ih/1.05")
+
     if speed_factor != 1.0:
-        clip = clip.fx(vfx.speedx, speed_factor)
-        
-    # Write to a temporary file
-    temp_video = output_path + ".temp.mp4"
-    try:
-        clip.write_videofile(
-            temp_video,
-            codec="libx264",
-            audio_codec="aac",
-            fps=30,
-            logger=None
-        )
-    except Exception as write_err:
-        print(f"[VideoEffects] write_videofile failed: {write_err}")
-        clip.close()
-        raise RuntimeError(f"Video processing failed: {write_err}")
-    finally:
-        clip.close()
+        vf.append(f"setpts=PTS/{speed_factor:.4f}")
 
-    if not os.path.exists(temp_video) or os.path.getsize(temp_video) == 0:
-        raise RuntimeError(f"Video processing produced no output for {output_path}")
+    # ── Build audio filter chain ──────────────────────────────────────
+    af = []
 
-    # 4. Audio Pitch Shifting (if we want to preserve and pitch-shift the audio)
-    pitch_semitones = float(options.get("pitch_shift", 0.8))
-    if pitch_semitones != 0.0:
-        # Extract audio from temp video
-        temp_audio = output_path + ".temp.wav"
-        temp_shifted_audio = output_path + ".shifted.wav"
+    if has_audio:
+        if speed_factor != 1.0:
+            af.append(f"atempo={speed_factor:.4f}")
 
-        # Extract command
-        extract_cmd = ["ffmpeg", "-y", "-i", temp_video, "-vn", "-acodec", "pcm_s16le", temp_audio]
-        subprocess.run(extract_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if pitch_semi != 0.0:
+            # asetrate shifts pitch; atempo corrects back to original speed
+            multiplier = 2.0 ** (pitch_semi / 12.0)
+            new_rate   = int(44100 * multiplier)
+            tempo_corr = 1.0 / multiplier
+            af.append(f"asetrate={new_rate},atempo={tempo_corr:.6f}")
 
-        if os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 0:
-            try:
-                # Apply pitch shift
-                pitch_shift_audio(temp_audio, temp_shifted_audio, pitch_semitones)
+    # ── Assemble FFmpeg command ───────────────────────────────────────
+    cmd = ["ffmpeg", "-y", "-i", input_path]
 
-                # Combine shifted audio back to the temp video
-                combine_cmd = [
-                    "ffmpeg", "-y", "-i", temp_video, "-i", temp_shifted_audio,
-                    "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", output_path
-                ]
-                subprocess.run(combine_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            except Exception as e:
-                print(f"Error shifting audio pitch: {e}. Falling back to normal audio.")
-                if os.path.exists(output_path):
-                    os.remove(output_path)
-                import shutil
-                shutil.copy2(temp_video, output_path)
-            finally:
-                # Cleanup temp audio files
-                for f in [temp_audio, temp_shifted_audio]:
-                    if os.path.exists(f):
-                        os.remove(f)
-        else:
-            # Video might have no audio — just copy temp to output
-            import shutil
-            shutil.copy2(temp_video, output_path)
+    if vf:
+        cmd += ["-vf", ",".join(vf)]
+
+    cmd += ["-c:v", "libx264", "-preset", "fast", "-movflags", "+faststart"]
+
+    if has_audio:
+        if af:
+            cmd += ["-af", ",".join(af)]
+        cmd += ["-c:a", "aac"]
     else:
-        import shutil
-        shutil.copy2(temp_video, output_path)
+        cmd += ["-an"]   # no audio stream in source — don't try to encode one
 
-    # Cleanup temp video
-    if os.path.exists(temp_video):
-        os.remove(temp_video)
+    cmd.append(output_path)
+
+    # ── Run ───────────────────────────────────────────────────────────
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if result.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        err = result.stderr.decode("utf-8", errors="ignore")[-600:]
+        raise RuntimeError(f"FFmpeg filter failed for {os.path.basename(input_path)}: {err}")
 
 
 def slice_video(input_path, output_dir, mode="auto", intervals=8, custom_ranges=None):
