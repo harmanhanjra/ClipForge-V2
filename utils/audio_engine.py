@@ -88,7 +88,6 @@ VOICE_STYLES = {
         "hopeful", "sad", "shouting", "whispering",
     ],
     "en-US-SaraNeural":  ["cheerful", "angry"],
-    "en-US-GuyNeural":   ["newscast", "excited"],
 }
 
 MOOD_LABELS = {
@@ -215,7 +214,7 @@ def generate_speech_gtts(text: str, lang: str, output_path: str, gender: str,
             output_path
         ]
         
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
         if res.returncode != 0:
             print(f"[gTTS Postprocess Error] {res.stderr.decode('utf-8')}")
             import shutil
@@ -248,8 +247,10 @@ def generate_speech(text: str, voice: str, output_path: str,
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(_tts_async(text, voice, output_path,
-                                               rate, pitch, style, style_degree))
+            loop.run_until_complete(asyncio.wait_for(
+                _tts_async(text, voice, output_path, rate, pitch, style, style_degree),
+                timeout=90,
+            ))
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -280,37 +281,62 @@ def create_mixed_audio(voiceover_path: str, bg_music_path: str,
     """
     Mix voiceover (full vol) with optional background music (bg_volume).
     Both are trimmed/looped to target_duration.
+    Either source may be omitted: voiceover-only, music-only, or both.
     """
-    try:
-        voice_clip = AudioFileClip(voiceover_path)
-        if voice_clip.duration > target_duration:
-            voice_clip = voice_clip.subclip(0, target_duration)
+    from moviepy.audio.AudioClip import concatenate_audioclips
 
+    clips_to_close = []
+    try:
+        voice_clip = None
+        if voiceover_path and os.path.exists(voiceover_path):
+            voice_clip = AudioFileClip(voiceover_path)
+            clips_to_close.append(voice_clip)
+            if voice_clip.duration > target_duration:
+                voice_clip = voice_clip.subclip(0, target_duration)
+
+        bg_clip = None
         if bg_music_path and os.path.exists(bg_music_path):
             bg_clip = AudioFileClip(bg_music_path)
+            clips_to_close.append(bg_clip)
             if bg_clip.duration < target_duration:
                 loops = int(target_duration / bg_clip.duration) + 1
-                from moviepy.audio.AudioClip import concatenate_audioclips
                 bg_clip = concatenate_audioclips([bg_clip] * loops)
-            bg_clip = bg_clip.subclip(0, target_duration).volumex(bg_volume)
+            bg_clip = bg_clip.subclip(0, target_duration)
+            # Music plays at full volume when there's no voiceover to sit under.
+            bg_clip = bg_clip.volumex(bg_volume if voice_clip is not None else 1.0)
+
+        if voice_clip is not None and bg_clip is not None:
             final_audio = CompositeAudioClip([voice_clip, bg_clip])
-        else:
+        elif voice_clip is not None:
             final_audio = voice_clip
+        elif bg_clip is not None:
+            final_audio = bg_clip
+        else:
+            print("[Audio Mix Error] No voiceover or background music provided.")
+            return False
 
         final_audio.write_audiofile(output_path, fps=44100,
                                     verbose=False, logger=None)
-        voice_clip.close()
-        return True
+        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
     except Exception as e:
         print(f"[Audio Mix Error] {e}")
         return False
+    finally:
+        for c in clips_to_close:
+            try:
+                c.close()
+            except Exception:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────
 # AI VIDEO GENERATION (Script-to-Video)
 # ─────────────────────────────────────────────────────────────────
 
-UPLOAD_FOLDER_ABS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+UPLOAD_FOLDER_ABS = os.environ.get(
+    'CLIPFORGE_UPLOAD_DIR',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+)
 
 STOPWORDS = {"welcome", "to", "the", "channel", "today", "we", "are", "going", "have", "you", "a", "an", "of", "and", "in", "is", "it", "that", "this", "for", "with", "on", "at", "by", "from", "up", "about", "into", "over", "after"}
 
@@ -554,42 +580,42 @@ def fetch_video_segment(keyword: str, index: int, dest_path: str, fallback_theme
 
 
 def download_ai_generated_image(prompt: str, width: int, height: int, dest_path: str) -> bool:
-    """Generate and download a custom AI image via Hugging Face Space (Stable Diffusion 3) based on the prompt."""
+    """Generate a custom AI image from a text prompt via Pollinations AI.
+
+    Pollinations exposes a simple GET endpoint that returns a generated JPEG,
+    so no heavy client library or auth is required. Falls back gracefully
+    (returns False) so callers can use a solid-colour slide instead.
+    """
     try:
-        from gradio_client import Client
-        import shutil
-        
-        space = "stabilityai/stable-diffusion-3-medium"
-        # We ensure width/height are standard multiples of 64 or 128 that SD3 supports well
-        sd_w = 1024 if width > height else 768
-        sd_h = 768 if width > height else 1024
-        
-        print(f"Connecting to Hugging Face Space '{space}' to generate image for prompt: '{prompt}'...")
-        client = Client(space)
-        
-        result = client.predict(
-            prompt=prompt,
-            negative_prompt="deformed, low quality, bad hands, blurry, watermark",
-            seed=0,
-            randomize_seed=True,
-            width=sd_w,
-            height=sd_h,
-            guidance_scale=5.0,
-            num_inference_steps=20,
-            api_name="/infer"
+        clean_prompt = prompt.strip()
+        if not clean_prompt:
+            clean_prompt = "cinematic abstract background"
+        # Stable per-prompt seed (Python's str hash is randomized per process,
+        # so derive one from the characters for reproducible slides).
+        seed = sum(ord(ch) for ch in clean_prompt) % 100000
+        encoded = urllib.parse.quote(clean_prompt)
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width={width}&height={height}&seed={seed}&nologo=true&model=flux"
         )
-        
-        image_path = result[0] if isinstance(result, tuple) else result
-        if image_path and os.path.exists(image_path):
-            shutil.copy(image_path, dest_path)
-            print(f"Successfully generated AI image saved to: {dest_path}")
-            return True
-        else:
-            print("[AI Generation Error] Result path does not exist.")
-            return False
-            
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        print(f"Generating AI image via Pollinations for prompt: '{clean_prompt}'...")
+        with urllib.request.urlopen(req, timeout=90) as response:
+            data = response.read()
+        # Basic sanity check: a real image is more than a few hundred bytes.
+        if data and len(data) > 1024:
+            with open(dest_path, 'wb') as f:
+                f.write(data)
+            if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1024:
+                print(f"Successfully generated AI image saved to: {dest_path}")
+                return True
+        print("[AI Generation Error] Empty or too-small response from Pollinations.")
+        return False
     except Exception as e:
-        print(f"[AI Generation Error] Failed to generate image via Gradio Space: {e}")
+        print(f"[AI Generation Error] Failed to generate image via Pollinations: {e}")
         return False
 
 
@@ -811,26 +837,30 @@ def generate_ai_video(script_text: str, theme: str, aspect_ratio: str,
         
         # Render video with ultrafast preset for maximum speed
         final_video_raw.write_videofile(temp_video_path, fps=24, preset="ultrafast", verbose=False, logger=None)
-        
-        # FFmpeg combine
-        cmd = [
-            "ffmpeg", "-y", "-i", temp_video_path, "-i", mixed_audio_path,
-            "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
-            "-shortest" if trim_audio else "", output_path
-        ]
-        cmd = [c for c in cmd if c != ""]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        
+
+        # Capture duration BEFORE closing clips (attribute is lost after cleanup).
+        final_duration = final_video_raw.duration
+
+        # FFmpeg combine — apad pads short audio with silence and the explicit
+        # -t caps output at the video length (-shortest is unreliable with
+        # -c:v copy), so rounding differences never truncate the video.
+        cmd = ["ffmpeg", "-y", "-i", temp_video_path, "-i", mixed_audio_path,
+               "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac"]
+        if trim_audio:
+            cmd += ["-af", "apad", "-t", f"{final_duration:.3f}"]
+        cmd.append(output_path)
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=600)
+
         # Cleanup clips memory
         for c in video_clips: c.close()
         for c in audio_clips: c.close()
         for c in downloaded_video_clips: c.close()
         final_video_raw.close()
         final_audio_raw.close()
-        
+
         return {
             "success": True,
-            "duration": final_video_raw.duration,
+            "duration": final_duration,
             "sentences_count": len(sentences)
         }
         

@@ -84,11 +84,11 @@ def pitch_shift_audio(input_audio_path, output_audio_path, semitones=0.8):
         "-filter_complex", f"asetrate={new_rate},atempo={tempo}",
         output_audio_path
     ]
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=600)
 
 def apply_copyright_filters(input_path, output_path, options):
     """
-    Applies visual and audio transformations to bypass copyright filters.
+    Applies creative visual edits and replaces the source audio.
     Uses pure FFmpeg subprocess for reliability — no moviepy silent failures.
 
     Filters applied:
@@ -96,20 +96,22 @@ def apply_copyright_filters(input_path, output_path, options):
     - Horizontal mirror (hflip)
     - 5% center zoom-in (crop + scale)
     - Speed adjustment (setpts + atempo)
-    - Audio pitch shift (asetrate + atempo correction)
+    - Generated original audio, user-supplied licensed audio, or mute
     """
     aspect       = options.get("aspect_ratio", "original")
     do_mirror    = options.get("mirror", True)
     do_zoom      = options.get("zoom", True)
     speed_factor = float(options.get("speed", 1.04))
     pitch_semi   = float(options.get("pitch_shift", 0.8))
+    audio_mode   = options.get("audio_mode", "generated")
+    replacement  = options.get("replacement_audio_path")
 
     # ── Check if the source has an audio stream ──────────────────────
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "a:0",
          "-show_entries", "stream=codec_name",
          "-of", "default=noprint_wrappers=1:nokey=1", input_path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30
     )
     has_audio = bool(probe.stdout.strip())
 
@@ -150,13 +152,23 @@ def apply_copyright_filters(input_path, output_path, options):
 
     # ── Assemble FFmpeg command ───────────────────────────────────────
     cmd = ["ffmpeg", "-y", "-i", input_path]
+    if audio_mode == "generated":
+        # A locally synthesized ambient chord contains no sampled recording.
+        sound = "aevalsrc=0.055*(sin(2*PI*220*t)+0.6*sin(2*PI*277.18*t)+0.4*sin(2*PI*329.63*t))*(0.7+0.3*sin(2*PI*0.25*t)):s=44100"
+        cmd += ["-f", "lavfi", "-i", sound]
+    elif audio_mode == "upload" and replacement:
+        cmd += ["-stream_loop", "-1", "-i", replacement]
 
     if vf:
         cmd += ["-vf", ",".join(vf)]
 
     cmd += ["-c:v", "libx264", "-preset", "fast", "-movflags", "+faststart"]
 
-    if has_audio:
+    if audio_mode in {"generated", "upload"}:
+        cmd += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-shortest"]
+    elif audio_mode == "mute":
+        cmd += ["-an"]
+    elif has_audio:
         if af:
             cmd += ["-af", ",".join(af)]
         cmd += ["-c:a", "aac"]
@@ -166,7 +178,7 @@ def apply_copyright_filters(input_path, output_path, options):
     cmd.append(output_path)
 
     # ── Run ───────────────────────────────────────────────────────────
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900)
 
     if result.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         err = result.stderr.decode("utf-8", errors="ignore")[-600:]
@@ -209,13 +221,23 @@ def slice_video(input_path, output_dir, mode="auto", intervals=8, custom_ranges=
     output_files = []
     for start, end, filename in slices:
         out_path = os.path.join(output_dir, filename)
-        # Use FFmpeg directly for fast lossless seeking and cutting
+        seg_duration = max(0.0, end - start)
+        if seg_duration <= 0:
+            continue
+        # Accurate cut: fast pre-input seek + re-encode so the segment starts
+        # exactly at `start` and lasts exactly `seg_duration`. `-c copy` would
+        # snap to keyframes and drift, breaking custom timestamp ranges.
         cmd = [
-            "ffmpeg", "-y", "-ss", str(start), "-to", str(end),
-            "-i", input_path, "-c", "copy", out_path
+            "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", input_path,
+            "-t", f"{seg_duration:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac",
+            "-movflags", "+faststart", out_path
         ]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+        if result.returncode != 0:
+            err = result.stderr.decode("utf-8", errors="ignore")[-500:]
+            raise RuntimeError(f"FFmpeg clip slicing failed: {err}")
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             output_files.append(out_path)
-            
+
     return output_files

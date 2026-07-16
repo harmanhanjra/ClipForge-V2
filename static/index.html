@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jigarzzz❤️ – Premium Video Suite</title>
-    <meta name="description" content="AI-powered video merger, voiceover generator, and YouTube safe clipper. Free & professional.">
+    <title>ClipForge — Video Creator Studio</title>
+    <meta name="description" content="Clip YouTube videos, merge media, create voiceovers, and manage exports in one focused creator studio.">
+    <meta name="theme-color" content="#080A0F">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=14">
     <style>
         /* ── Progress Bar ── */
         .progress-bar-wrap {
@@ -174,8 +176,10 @@
             pointer-events: none;
         }
     </style>
+    <link rel="stylesheet" href="css/polish.css?v=12">
 </head>
 <body>
+    <a class="skip-link" href="#main-workspace">Skip to workspace</a>
     <!-- Ambient Glow Orbs -->
     <div class="glow-bg"></div>
     <div class="glow-bg-secondary"></div>
@@ -187,17 +191,20 @@
         ════════════════════════════════════════════ -->
         <header class="app-header">
             <div class="logo">
-                <div class="rocket-container">
-                    <span class="fire-flame">🔥</span>
-                    <span class="rocket">🚀</span>
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M8 5.5v13l10-6.5L8 5.5Z" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M4 4v16" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <div>
-                    <h1>Jigarzzz<span class="heart-red">❤️</span></h1>
-                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:1px; font-weight:500; letter-spacing:0.3px;">Premium Video Suite</div>
+                <div class="brand-copy">
+                    <h1>ClipForge</h1>
+                    <p>Video creator studio</p>
                 </div>
             </div>
-            <div class="eyecatchy-header">
-                <span>Unlimited Free Voice generation, video generation and Anti copyright yt</span>
+            <div class="header-status" aria-label="Application status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span>Local workspace ready</span>
             </div>
         </header>
 
@@ -206,24 +213,30 @@
         ════════════════════════════════════════════ -->
         <div class="hero-stats">
             <div class="stat-card">
-                <div class="stat-icon-wrap cyan">🎬</div>
+                <div class="stat-icon-wrap cyan" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7.5h16v11H4zM7 7.5l2-3h6l2 3M9.5 11l5 3-5 3v-6Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
                 <div class="stat-info">
                     <span class="stat-value" id="stat-files">0</span>
-                    <span class="stat-label">Files Exported</span>
+                    <span class="stat-label">Exports ready</span>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon-wrap pink">🎙️</div>
+                <div class="stat-icon-wrap pink" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 5l8 14M16 5 8 19M5 8h14M5 16h14" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
                 <div class="stat-info">
                     <span class="stat-value" id="stat-clips">0</span>
-                    <span class="stat-label">YT Clips Created</span>
+                    <span class="stat-label">Clips this session</span>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon-wrap purple">🔊</div>
+                <div class="stat-icon-wrap purple" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 10v4h3l4 3V7l-4 3H5ZM16 9.5a4 4 0 0 1 0 5M18 7a7 7 0 0 1 0 10" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
                 <div class="stat-info">
                     <span class="stat-value" id="stat-audio">0</span>
-                    <span class="stat-label">Audio Tracks Mixed</span>
+                    <span class="stat-label">Voice mixes</span>
                 </div>
             </div>
         </div>
@@ -231,36 +244,42 @@
         <!-- ═══════════════════════════════════════════
              MAIN WORKSPACE
         ════════════════════════════════════════════ -->
-        <div class="workspace-grid">
+        <div class="workspace-grid" id="main-workspace">
 
             <!-- ── LEFT: Controls Panel ── -->
             <main class="controls-panel">
                 <!-- Navigation Tabs -->
-                <div class="tabs-nav">
-                    <button class="tab-btn active" data-tab="merger-tab" id="tab-merger">
-                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h6"/>
-                        </svg>
-                        Video Merger &amp; Overlay
-                    </button>
-                    <button class="tab-btn" data-tab="clipper-tab" id="tab-clipper">
+                <div class="tabs-nav" role="tablist" aria-label="Creator tools">
+                    <button class="tab-btn active" data-tab="clipper-tab" id="tab-clipper" role="tab" aria-selected="true" aria-controls="clipper-tab">
                         <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        YouTube Safe Clipper
+                        YouTube Clipper
                     </button>
-                    <button class="tab-btn" data-tab="ai-creator-tab" id="tab-ai-creator">
+                    <button class="tab-btn" data-tab="merger-tab" id="tab-merger" role="tab" aria-selected="false" aria-controls="merger-tab">
+                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h6"/>
+                        </svg>
+                        Merge &amp; Voiceover
+                    </button>
+                    <button class="tab-btn" data-tab="ai-creator-tab" id="tab-ai-creator" role="tab" aria-selected="false" aria-controls="ai-creator-tab">
                         <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: #a855f7;">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L5.05 15.15a2 2 0 00-1.022.547l-1.39 1.39a1 1 0 00.707 1.707h16.31a1 1 0 00.707-1.707l-1.39-1.39zM12 2v4M12 6L9.5 8.5M12 6l2.5 2.5"/>
                         </svg>
-                        🪄 AI Video Creator
+                        AI Video
+                    </button>
+                    <button class="tab-btn nvidia-tab-btn" data-tab="nvidia-ai-tab" id="tab-nvidia-ai" role="tab" aria-selected="false" aria-controls="nvidia-ai-tab">
+                        <svg class="tab-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12c2.2-4 5-6 8.5-6 3 0 5.4 1.5 7.5 4.5-1.8 3.6-4.5 5.5-8 5.5-2.6 0-4.7-1.1-6.2-3M9 12a3 3 0 106 0 3 3 0 00-6 0z"/>
+                        </svg>
+                        NVIDIA AI
                     </button>
                 </div>
 
                 <!-- ═══════════════════════════════════
                      TAB 1 – VIDEO MERGER
                 ════════════════════════════════════ -->
-                <div id="merger-tab" class="tab-content active">
+                <div id="merger-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-merger">
                     <form id="merge-form">
 
                         <!-- Step 1: Upload Clips -->
@@ -437,26 +456,29 @@
                 <!-- ═══════════════════════════════════
                      TAB 2 – YOUTUBE CLIPPER
                 ════════════════════════════════════ -->
-                <div id="clipper-tab" class="tab-content">
+                <div id="clipper-tab" class="tab-content active" role="tabpanel" aria-labelledby="tab-clipper">
                     <form id="clip-form">
 
                         <!-- Step 1: YouTube URL -->
                         <div class="input-section">
-                            <h3 class="section-title">1. YouTube Video URL</h3>
+                            <h3 class="section-title"><span class="step-number">1</span> Source video</h3>
+                            <p class="section-desc">Use a standard YouTube or youtu.be link that you have permission to process.</p>
                             <div class="form-group">
+                                <label for="url">YouTube URL</label>
                                 <div class="url-input-wrap">
                                     <svg class="url-input-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                                     </svg>
-                                    <input type="text" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+                                    <input type="url" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="url" inputmode="url" required aria-describedby="url-help">
                                 </div>
+                                <small class="help-text" id="url-help">Playlist parameters are accepted; the selected video is processed.</small>
                             </div>
                         </div>
 
                         <!-- Step 2: Aspect Ratio -->
                         <div class="input-section">
-                            <h3 class="section-title">2. Output Format</h3>
-                            <p class="section-desc">Keep original or crop to a target platform ratio.</p>
+                            <h3 class="section-title"><span class="step-number">2</span> Output format</h3>
+                            <p class="section-desc">Keep the source frame or crop for the platform where you will publish.</p>
                             <div class="ratio-options ratio-3col">
                                 <label class="ratio-card">
                                     <input type="radio" name="aspect_ratio" value="original" checked>
@@ -478,10 +500,10 @@
 
                         <!-- Step 3: Slicing Mode -->
                         <div class="input-section">
-                            <h3 class="section-title">3. Slicing Method</h3>
+                            <h3 class="section-title"><span class="step-number">3</span> Clip timing</h3>
                             <div class="audio-toggle-container">
-                                <button type="button" class="toggle-btn active" data-type="auto" id="clip-toggle-auto">⚡ Auto-Split</button>
-                                <button type="button" class="toggle-btn" data-type="timestamps" id="clip-toggle-ts">🕐 Custom Timestamps</button>
+                                <button type="button" class="toggle-btn active" data-type="auto" id="clip-toggle-auto">Equal-length clips</button>
+                                <button type="button" class="toggle-btn" data-type="timestamps" id="clip-toggle-ts">Custom timestamps</button>
                             </div>
 
                             <!-- Auto Split Panel -->
@@ -506,21 +528,32 @@
                             </div>
                         </div>
 
-                        <!-- Step 4: Safety Filters -->
+                        <!-- Step 4: Creative edits and replacement audio -->
                         <div class="input-section">
-                            <h3 class="section-title">4. Safety Filters <span class="badge red" style="margin-left:6px; vertical-align:middle;">Anti-Copyright</span></h3>
-                            <p class="section-desc">Applies transformations to evade automated content matching.</p>
+                            <h3 class="section-title"><span class="step-number">4</span> Creative adjustments</h3>
+                            <p class="section-desc">The original soundtrack is removed. This reduces audio claims, but you still need permission for the source video and any uploaded music.</p>
+
+                            <div class="form-group">
+                                <label for="audio-mode">Replacement audio</label>
+                                <select id="audio-mode" name="audio_mode">
+                                    <option value="generated" selected>Generated original ambient audio</option>
+                                    <option value="upload">Upload audio I own or licensed</option>
+                                    <option value="mute">Mute clip</option>
+                                </select>
+                                <input type="file" id="replacement-audio" name="replacement_audio" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" style="margin-top:10px;" disabled>
+                                <small class="help-text">Generated audio uses no sampled recording. Upload mode does not verify a music licence.</small>
+                            </div>
 
                             <div class="filters-grid">
                                 <label class="checkbox-container">
                                     <input type="checkbox" name="mirror" value="true" checked>
                                     <span class="checkmark"></span>
-                                    ↔ Horizontal Flip
+                                    Horizontal flip
                                 </label>
                                 <label class="checkbox-container">
                                     <input type="checkbox" name="zoom" value="true" checked>
                                     <span class="checkmark"></span>
-                                    🔍 Edge Crop &amp; Zoom (1.05x)
+                                    Edge crop &amp; zoom (1.05×)
                                 </label>
                             </div>
 
@@ -534,22 +567,13 @@
                                         <option value="0.95">Slight Slow-down (0.95×)</option>
                                     </select>
                                 </div>
-                                <div class="form-group">
-                                    <label for="pitch_shift">Audio Pitch Shift</label>
-                                    <select id="pitch_shift" name="pitch_shift">
-                                        <option value="0.0">Normal Pitch (0.0)</option>
-                                        <option value="0.8" selected>Slight High (+0.8)</option>
-                                        <option value="1.5">High Pitch (+1.5)</option>
-                                        <option value="-0.8">Slight Low (-0.8)</option>
-                                    </select>
-                                </div>
                             </div>
                         </div>
 
                         <!-- Progress Bar -->
                         <div class="progress-bar-wrap" id="clip-progress">
                             <div class="progress-bar-header">
-                                <span class="progress-status"><span class="pulse-dot"></span> Processing…</span>
+                                <span class="progress-status" role="status"><span class="pulse-dot"></span> Processing</span>
                                 <span class="progress-pct" id="clip-pct">0%</span>
                             </div>
                             <div class="progress-track">
@@ -560,7 +584,7 @@
 
                         <button type="submit" class="submit-btn" id="clip-submit-btn"
                                 style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); box-shadow: 0 6px 30px rgba(245,87,108,0.35);">
-                            <span class="btn-text">✂️ Download &amp; Create Clips</span>
+                            <span class="btn-text">Create clips</span>
                             <span class="btn-loader"></span>
                         </button>
                     </form>
@@ -569,7 +593,7 @@
                 <!-- ═══════════════════════════════════
                      TAB 3 – AI VIDEO CREATOR
                 ════════════════════════════════════ -->
-                <div id="ai-creator-tab" class="tab-content">
+                <div id="ai-creator-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-ai-creator">
                     <form id="ai-video-form">
                         
                         <!-- Step 1: Script Text -->
@@ -719,15 +743,106 @@
                         <input type="hidden" id="ai-tts-pitch" name="pitch" value="+0Hz">
                     </form>
                 </div>
+
+                <!-- ═══════════════════════════════════
+                     TAB 4 – NVIDIA AI ASSISTANT
+                ════════════════════════════════════ -->
+                <div id="nvidia-ai-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-nvidia-ai">
+                    <div class="nvidia-hero">
+                        <div class="nvidia-mark" aria-hidden="true">N</div>
+                        <div>
+                            <span class="nvidia-kicker">Powered by NVIDIA NIM</span>
+                            <h2>Shorts AI Assistant</h2>
+                            <p>Transcribe an exported clip, then create an optimized title, description, hashtags, hook, and pinned comment.</p>
+                        </div>
+                    </div>
+
+                    <section class="input-section nvidia-connect-card" aria-labelledby="nvidia-connect-title">
+                        <div class="nvidia-section-head">
+                            <div>
+                                <h3 class="section-title" id="nvidia-connect-title"><span class="step-number">1</span> Connect NVIDIA</h3>
+                                <p class="section-desc">Your key is encrypted with Windows security and never shown again.</p>
+                            </div>
+                            <span class="connection-pill" id="nvidia-status"><span class="connection-dot"></span> Not connected</span>
+                        </div>
+                        <div class="nvidia-key-row">
+                            <div class="form-group nvidia-key-field">
+                                <label for="nvidia-api-key">NVIDIA API key</label>
+                                <div class="password-field">
+                                    <input type="password" id="nvidia-api-key" autocomplete="off" spellcheck="false" placeholder="nvapi-••••••••••••••••">
+                                    <button type="button" class="password-toggle" id="nvidia-key-toggle" aria-label="Show API key">Show</button>
+                                </div>
+                            </div>
+                            <button type="button" class="submit-btn nvidia-connect-btn" id="nvidia-connect-btn"><span class="btn-text">Connect securely</span><span class="btn-loader"></span></button>
+                            <button type="button" class="secondary-btn nvidia-verify-btn" id="nvidia-verify-btn" hidden>Test key</button>
+                            <button type="button" class="secondary-btn nvidia-disconnect-btn" id="nvidia-disconnect-btn" hidden>Disconnect</button>
+                        </div>
+                    </section>
+
+                    <section class="input-section" aria-labelledby="nvidia-source-title">
+                        <h3 class="section-title" id="nvidia-source-title"><span class="step-number">2</span> Choose source</h3>
+                        <p class="section-desc">Select a finished video from your export library. Parakeet ASR will turn its speech into text.</p>
+                        <div class="form-row nvidia-source-row">
+                            <div class="form-group">
+                                <label for="nvidia-video-select">Exported video</label>
+                                <select id="nvidia-video-select"><option value="">No exported videos found</option></select>
+                            </div>
+                            <div class="form-group nvidia-language-field">
+                                <label for="nvidia-asr-language">Spoken language</label>
+                                <select id="nvidia-asr-language">
+                                    <option value="en-US" selected>English (Parakeet)</option>
+                                </select>
+                                <small class="help-text">This NVIDIA Parakeet endpoint currently supports English audio.</small>
+                            </div>
+                        </div>
+                        <button type="button" class="secondary-btn nvidia-action-btn" id="nvidia-transcribe-btn">Generate transcript</button>
+                        <p class="nvidia-working" id="nvidia-transcribe-status" role="status" hidden><span class="pulse-dot"></span> Extracting audio and transcribing with NVIDIA…</p>
+                    </section>
+
+                    <section class="input-section" aria-labelledby="nvidia-metadata-title">
+                        <h3 class="section-title" id="nvidia-metadata-title"><span class="step-number">3</span> Generate Shorts package</h3>
+                        <p class="section-desc">You can edit the transcript or paste a topic directly if the clip has no speech.</p>
+                        <div class="form-group">
+                            <label for="nvidia-transcript">Transcript or video topic</label>
+                            <textarea id="nvidia-transcript" class="nvidia-transcript" placeholder="Select a clip and generate its transcript, or describe your video here…"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nvidia-output-language">Output language</label>
+                                <select id="nvidia-output-language">
+                                    <option>English</option><option>German</option><option>Hindi</option><option>Urdu</option><option>Punjabi</option><option>Spanish</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="nvidia-tone">Style</label>
+                                <select id="nvidia-tone">
+                                    <option>High-energy</option><option>Funny</option><option>Gaming hype</option><option>Curious</option><option>Professional</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" class="submit-btn nvidia-generate-btn" id="nvidia-generate-btn"><span class="btn-text">Generate with NVIDIA AI</span><span class="btn-loader"></span></button>
+                    </section>
+
+                    <section class="nvidia-results" id="nvidia-results" aria-live="polite" hidden>
+                        <div class="nvidia-results-head"><div><span class="nvidia-kicker">Ready to publish</span><h3>Your Shorts package</h3></div><button type="button" class="secondary-btn" id="nvidia-copy-all">Copy all</button></div>
+                        <article class="ai-result-card"><div class="ai-result-label">Title <button type="button" class="copy-field-btn" data-copy="nvidia-result-title">Copy</button></div><div id="nvidia-result-title" class="ai-result-text"></div></article>
+                        <article class="ai-result-card"><div class="ai-result-label">Description <button type="button" class="copy-field-btn" data-copy="nvidia-result-description">Copy</button></div><div id="nvidia-result-description" class="ai-result-text pre-wrap"></div></article>
+                        <article class="ai-result-card"><div class="ai-result-label">Hashtags <button type="button" class="copy-field-btn" data-copy="nvidia-result-hashtags">Copy</button></div><div id="nvidia-result-hashtags" class="hashtag-list"></div></article>
+                        <div class="nvidia-result-grid">
+                            <article class="ai-result-card"><div class="ai-result-label">Opening hook <button type="button" class="copy-field-btn" data-copy="nvidia-result-hook">Copy</button></div><div id="nvidia-result-hook" class="ai-result-text"></div></article>
+                            <article class="ai-result-card"><div class="ai-result-label">Pinned comment <button type="button" class="copy-field-btn" data-copy="nvidia-result-comment">Copy</button></div><div id="nvidia-result-comment" class="ai-result-text"></div></article>
+                        </div>
+                    </section>
+                </div>
             </main>
 
             <!-- ── RIGHT: Media Library ── -->
             <aside class="media-library">
                 <div class="library-header">
-                    <h2>📂 Exported Library</h2>
+                    <h2>Export library</h2>
                     <div style="display:flex;gap:8px;align-items:center;">
                         <button class="clear-library-btn" id="clear-library-btn" title="Delete all exported files">
-                            🗑 Clear All
+                            Clear all
                         </button>
                         <button class="refresh-btn" id="refresh-gallery" title="Refresh">
                             <svg class="refresh-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -739,13 +854,17 @@
 
                 <!-- Search -->
                 <div class="form-group" style="margin-bottom:16px; position:relative; z-index:1;">
-                    <input type="text" id="library-search" placeholder="🔍  Search exported files…" style="font-size:0.83rem;">
+                    <label class="sr-only" for="library-search">Search exported files</label>
+                    <input type="search" id="library-search" placeholder="Search exports" style="font-size:0.83rem;">
                 </div>
 
                 <div class="library-list" id="gallery-container">
                     <div class="empty-library">
-                        <div class="library-empty-art">🎞️</div>
-                        <span>No files exported yet.<br>Run a merge or clipping operation to begin.</span>
+                        <div class="library-empty-art" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6.5h16v12H4zM8 6.5l2-3h4l2 3M10 11l5 2.5-5 2.5v-5Z" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                        </div>
+                        <strong>No exports yet</strong>
+                        <span>Your completed videos and clips will appear here.</span>
                     </div>
                 </div>
             </aside>
@@ -755,12 +874,12 @@
         <!-- ══════════════════════════════════════════
              VIDEO PLAYER MODAL
         ═════════════════════════════════════════ -->
-        <div class="modal" id="video-modal">
+        <div class="modal" id="video-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <div class="modal-overlay" id="modal-close"></div>
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 id="modal-title">▶ Video Playback</h3>
-                    <button class="close-btn" id="modal-close-btn">×</button>
+                    <button class="close-btn" id="modal-close-btn" aria-label="Close video player">×</button>
                 </div>
                 <div class="modal-body">
                     <video id="modal-player" controls></video>
@@ -769,10 +888,10 @@
         </div>
 
         <!-- Toast -->
-        <div id="toast" class="toast"></div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     </div><!-- /app-container -->
 
-    <script src="js/app.js?v=9"></script>
+    <script src="js/app.js?v=14"></script>
 </body>
 </html>

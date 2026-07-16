@@ -1,6 +1,8 @@
 import os
+import sys
 import uuid
 import subprocess
+import shutil
 import PIL.Image
 
 # Monkeypatch PIL.Image.ANTIALIAS for compatibility with moviepy and newer Pillow versions
@@ -15,12 +17,25 @@ from utils.audio_engine import (
     VOICES, VOICE_STYLES, MOOD_LABELS, AGE_PRESETS
 )
 from utils.video_effects import concatenate_clips, apply_copyright_filters, slice_video
+from utils.nvidia_ai import (
+    NvidiaAIError,
+    clear_api_key as clear_nvidia_api_key,
+    generate_shorts_metadata,
+    is_configured as nvidia_is_configured,
+    save_api_key as save_nvidia_api_key,
+    test_connection as test_nvidia_connection,
+    transcribe_video,
+)
 
-app = Flask(__name__, static_folder='static', static_url_path='')
+RESOURCE_FOLDER = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+STATIC_FOLDER = os.path.join(RESOURCE_FOLDER, 'static')
+
+app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='')
 
 # Configuration
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
+PROJECT_FOLDER = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.environ.get('CLIPFORGE_UPLOAD_DIR', os.path.join(PROJECT_FOLDER, 'uploads'))
+OUTPUT_FOLDER = os.environ.get('CLIPFORGE_OUTPUT_DIR', os.path.join(PROJECT_FOLDER, 'outputs'))
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -37,14 +52,27 @@ for _f in os.listdir(OUTPUT_FOLDER):
 # Helper to execute shell commands (e.g. yt-dlp using local venv)
 def get_pip_binary(binary_name):
     # Returns path to binary in virtual env
-    venv_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', binary_name)
-    if os.path.exists(venv_bin):
-        return venv_bin
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    bundle_dir = getattr(sys, '_MEIPASS', None)
+    if bundle_dir:
+        for candidate in (
+            os.path.join(bundle_dir, 'bin', binary_name),
+            os.path.join(bundle_dir, 'bin', f'{binary_name}.exe'),
+        ):
+            if os.path.exists(candidate):
+                return candidate
+    for folder in ['bin', 'Scripts']:
+        venv_bin = os.path.join(base_dir, 'venv', folder, binary_name)
+        if os.path.exists(venv_bin):
+            return venv_bin
+        venv_bin_exe = os.path.join(base_dir, 'venv', folder, f"{binary_name}.exe")
+        if os.path.exists(venv_bin_exe):
+            return venv_bin_exe
     return binary_name
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index.html')
+    return send_from_directory(STATIC_FOLDER, 'index.html')
 
 @app.route('/api/voices', methods=['GET'])
 def get_voices():
@@ -55,6 +83,79 @@ def get_voices():
         'mood_labels':  MOOD_LABELS,
         'age_presets':  AGE_PRESETS,
     })
+
+
+@app.route('/api/nvidia/status', methods=['GET'])
+def nvidia_status():
+    """Report whether a key is available without ever returning the secret."""
+    return jsonify({'configured': nvidia_is_configured()})
+
+
+@app.route('/api/nvidia/connect', methods=['POST'])
+def nvidia_connect():
+    data = request.get_json(silent=True) or {}
+    api_key = str(data.get('api_key', '')).strip()
+    try:
+        # Persist first. The old flow called an undocumented /v1/models check
+        # before saving, which rejected valid NVIDIA keys on some accounts and
+        # left the desktop app permanently "not connected". Actual model calls
+        # still validate authentication and return a clear 401/403 message.
+        save_nvidia_api_key(api_key)
+        return jsonify({
+            'success': True,
+            'configured': True,
+            'message': 'NVIDIA key saved securely. It will be verified on first use.'
+        })
+    except NvidiaAIError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/nvidia/verify', methods=['POST'])
+def nvidia_verify():
+    """Run an explicit, documented NIM chat request against the saved key."""
+    try:
+        test_nvidia_connection()
+        return jsonify({'success': True, 'verified': True})
+    except NvidiaAIError as exc:
+        return jsonify({'success': False, 'verified': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/nvidia/disconnect', methods=['POST'])
+def nvidia_disconnect():
+    try:
+        clear_nvidia_api_key()
+        return jsonify({'success': True, 'configured': False})
+    except OSError:
+        return jsonify({'success': False, 'error': 'Could not remove the saved NVIDIA key.'}), 500
+
+
+@app.route('/api/nvidia/transcribe', methods=['POST'])
+def nvidia_transcribe():
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get('filename', '')).strip()
+    language = str(data.get('language', 'en-US')).strip() or 'en-US'
+    if not filename or filename != os.path.basename(filename):
+        return jsonify({'success': False, 'error': 'Select a valid exported video.'}), 400
+    video_path = os.path.join(OUTPUT_FOLDER, filename)
+    try:
+        transcript = transcribe_video(video_path, language)
+        return jsonify({'success': True, 'transcript': transcript, 'filename': filename})
+    except NvidiaAIError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/nvidia/generate-metadata', methods=['POST'])
+def nvidia_generate_metadata():
+    data = request.get_json(silent=True) or {}
+    try:
+        metadata = generate_shorts_metadata(
+            transcript=str(data.get('transcript', '')),
+            language=str(data.get('language', 'English')),
+            tone=str(data.get('tone', 'High-energy')),
+        )
+        return jsonify({'success': True, 'metadata': metadata})
+    except NvidiaAIError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
 
 
 @app.route('/api/preview-voice', methods=['POST'])
@@ -83,9 +184,25 @@ def preview_voice():
                           rate=rate, pitch=pitch,
                           output_path=out_path)
     if not ok or not os.path.exists(out_path):
+        # Nothing to serve — remove the empty temp file so it doesn't pile up.
+        try:
+            os.remove(out_path)
+        except Exception:
+            pass
         return jsonify({'error': 'Preview generation failed'}), 500
 
-    return send_file(out_path, mimetype='audio/mpeg',
+    # Read the bytes, then delete the temp file immediately so uploads/ stays clean.
+    try:
+        with open(out_path, 'rb') as f:
+            audio_bytes = f.read()
+    finally:
+        try:
+            os.remove(out_path)
+        except Exception:
+            pass
+
+    from io import BytesIO
+    return send_file(BytesIO(audio_bytes), mimetype='audio/mpeg',
                      as_attachment=False,
                      download_name='preview.mp3')
 
@@ -182,15 +299,16 @@ def merge_videos():
         final_output_path = os.path.join(OUTPUT_FOLDER, output_filename)
         
         if final_audio_path and os.path.exists(final_audio_path):
-            # Combine via FFmpeg for speed and precision
-            cmd = [
-                "ffmpeg", "-y", "-i", merged_temp_video, "-i", final_audio_path,
-                "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac",
-                "-shortest" if trim_audio else "", final_output_path
-            ]
-            # Remove empty arguments from command
-            cmd = [c for c in cmd if c != ""]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            # Combine via FFmpeg for speed and precision.
+            # apad pads short audio with silence; explicit -t caps the output at
+            # the video length (-shortest is unreliable with -c:v copy + filters),
+            # so a short voiceover never truncates the video.
+            cmd = ["ffmpeg", "-y", "-i", merged_temp_video, "-i", final_audio_path,
+                   "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac"]
+            if trim_audio:
+                cmd += ["-af", "apad", "-t", f"{duration:.3f}"]
+            cmd.append(final_output_path)
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=1800)
         else:
             # No audio overlay, rename raw merged video
             os.rename(merged_temp_video, final_output_path)
@@ -218,27 +336,43 @@ def merge_videos():
 @app.route('/api/clip', methods=['POST'])
 def clip_youtube_video():
     """
-    Downloads a YouTube video, cuts it into clips, and applies anti-copyright filters.
+    Downloads a permitted YouTube video, cuts it into clips, and applies creative edits.
     """
+    job_id = None
     try:
         url = request.form.get('url')
         if not url:
             return jsonify({'success': False, 'error': 'YouTube URL is required.'}), 400
+        job_id = str(uuid.uuid4())
             
         mode = request.form.get('mode', 'auto') # 'auto' or 'timestamps'
         interval = int(request.form.get('interval', 8))
         timestamps_str = request.form.get('timestamps', '')
         
+        audio_mode = request.form.get('audio_mode', 'generated')
+        if audio_mode not in {'generated', 'upload', 'mute'}:
+            return jsonify({'success': False, 'error': 'Invalid replacement audio option.'}), 400
+
+        replacement_audio_path = None
+        if audio_mode == 'upload':
+            uploaded_audio = request.files.get('replacement_audio')
+            extension = os.path.splitext(uploaded_audio.filename if uploaded_audio else '')[1].lower()
+            if not uploaded_audio or extension not in {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'}:
+                return jsonify({'success': False, 'error': 'Upload a supported licensed audio file.'}), 400
+            replacement_audio_path = os.path.join(UPLOAD_FOLDER, f"{job_id}_replacement{extension}")
+            uploaded_audio.save(replacement_audio_path)
+
         # Filter options
         filters = {
             'aspect_ratio': request.form.get('aspect_ratio', 'original'),
             'mirror': request.form.get('mirror', 'true') == 'true',
             'zoom': request.form.get('zoom', 'true') == 'true',
             'speed': float(request.form.get('speed', 1.04)),
-            'pitch_shift': float(request.form.get('pitch_shift', 0.8))
+            'pitch_shift': 0.0,
+            'audio_mode': audio_mode,
+            'replacement_audio_path': replacement_audio_path,
         }
         
-        job_id = str(uuid.uuid4())
         raw_download_path = os.path.join(UPLOAD_FOLDER, f"{job_id}_raw.mp4")
         
         # 1. Download YouTube Video using yt-dlp
@@ -255,6 +389,9 @@ def clip_youtube_video():
 
         download_cmd = [
             ytdlp_bin,
+            # A watch URL can include radio/playlist parameters. Process only
+            # the explicitly requested video instead of downloading the list.
+            "--no-playlist",
             # Quality: max 720p
             "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "--merge-output-format", "mp4",
@@ -277,8 +414,7 @@ def clip_youtube_video():
 
         # Only add --impersonate if curl-cffi is installed
         if has_curl_cffi:
-            download_cmd.insert(3, "chrome")
-            download_cmd.insert(3, "--impersonate")
+            download_cmd[1:1] = ["--impersonate", "chrome"]
 
         result = subprocess.run(download_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=480)
         stderr_text = result.stderr.decode('utf-8', errors='ignore')
@@ -342,24 +478,36 @@ def clip_youtube_video():
             if os.path.exists(out_path):
                 processed_files.append(out_filename)
                 
-        # Cleanup raw downloaded file & sliced folder
-        if os.path.exists(raw_download_path):
-            os.remove(raw_download_path)
-            
-        import shutil
-        if os.path.exists(temp_clips_dir):
-            shutil.rmtree(temp_clips_dir)
-            
         return jsonify({
             'success': True,
             'message': f'YouTube video processed into {len(processed_files)} clips!',
             'filenames': processed_files
         })
-        
+
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': 'YouTube download timed out. Try a shorter video or try again.'
+        }), 504
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        # Remove the raw download, yt-dlp fragments, and slice directory on
+        # success, failure, or timeout. Every job artifact starts with job_id.
+        if job_id:
+            for name in os.listdir(UPLOAD_FOLDER):
+                if not name.startswith(job_id):
+                    continue
+                path = os.path.join(UPLOAD_FOLDER, name)
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path)
+                    else:
+                        os.remove(path)
+                except OSError as cleanup_error:
+                    print(f'[cleanup] Could not remove {name}: {cleanup_error}')
 
 def get_video_duration(path):
     try:
@@ -367,7 +515,7 @@ def get_video_duration(path):
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1", path
         ]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
         if res.returncode == 0:
             duration = float(res.stdout.strip())
             return f"{duration:.1f}s"
@@ -396,7 +544,10 @@ def get_outputs():
         files.append({
             'filename': f,
             'size': f"{size_mb:.2f} MB",
-            'duration': get_video_duration(path)
+            # Keep the library endpoint fast even with hundreds of exports.
+            # Probing every MP4 serially made the UI appear empty for minutes.
+            # The native video player exposes exact duration when opened.
+            'duration': None
         })
     # Sort newest first
     files.sort(

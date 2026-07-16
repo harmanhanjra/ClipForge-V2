@@ -1292,3 +1292,212 @@ input[type="file"]:hover { border-color: var(--border-bright); }
     font-weight: 600;
 }
 
+/* ── NVIDIA NIM assistant ─────────────────────────────────────── */
+.tabs-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nvidia-tab-btn .tab-icon { color: #76b900; }
+.nvidia-tab-btn.active {
+    color: #b7f45a;
+    border-color: rgba(118,185,0,.34);
+    background: linear-gradient(180deg, rgba(118,185,0,.13), rgba(118,185,0,.04));
+}
+.nvidia-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 18px;
+    padding: 22px;
+    border: 1px solid rgba(118,185,0,.26);
+    border-radius: var(--r-lg);
+    background:
+        radial-gradient(circle at 0 0, rgba(118,185,0,.20), transparent 42%),
+        linear-gradient(135deg, rgba(20,26,16,.96), rgba(12,15,14,.96));
+    overflow: hidden;
+}
+.nvidia-hero h2 { margin: 3px 0 6px; font-size: 1.38rem; color: #f6f9f2; }
+.nvidia-hero p { margin: 0; color: var(--text-muted); font-size: .85rem; line-height: 1.55; }
+.nvidia-mark {
+    display: grid;
+    place-items: center;
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    color: #0a0e07;
+    background: #76b900;
+    box-shadow: 0 10px 32px rgba(118,185,0,.24);
+    font-size: 1.75rem;
+    font-weight: 900;
+    font-style: italic;
+}
+.nvidia-kicker {
+    color: #95d331;
+    font-size: .66rem;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+.nvidia-section-head, .nvidia-results-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+}
+.connection-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,.03);
+    font-size: .7rem;
+    font-weight: 700;
+}
+.connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #69717e; }
+.connection-pill.connected { color: #b7f45a; border-color: rgba(118,185,0,.28); background: rgba(118,185,0,.08); }
+.connection-pill.connected .connection-dot { background: #76b900; box-shadow: 0 0 10px rgba(118,185,0,.7); }
+.nvidia-key-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 16px; }
+.nvidia-key-field { flex: 1 1 360px; margin: 0; }
+.password-field { position: relative; }
+.password-field input { padding-right: 58px; }
+.password-toggle {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    color: var(--text-muted);
+    background: transparent;
+    font: inherit;
+    font-size: .7rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.nvidia-connect-btn, .nvidia-action-btn, .nvidia-generate-btn { width: auto; margin: 0; white-space: nowrap; }
+.nvidia-connect-btn, .nvidia-generate-btn {
+    background: linear-gradient(135deg, #76b900, #4f8e00);
+    color: #080b05;
+    box-shadow: 0 8px 24px rgba(118,185,0,.2);
+}
+.nvidia-connect-btn { min-height: 43px; padding: 0 18px; }
+.nvidia-disconnect-btn, .nvidia-verify-btn { min-height: 43px; }
+.secondary-btn {
+    min-height: 39px;
+    padding: 0 14px;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 9px;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,.045);
+    font: inherit;
+    font-size: .76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .18s ease;
+}
+.secondary-btn:hover { color: #fff; border-color: rgba(118,185,0,.35); background: rgba(118,185,0,.08); }
+.nvidia-source-row { grid-template-columns: minmax(0, 1fr) 160px; }
+.nvidia-action-btn { color: #b7f45a; border-color: rgba(118,185,0,.3); }
+.nvidia-working { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: #b7f45a; font-size: .76rem; }
+.nvidia-working .pulse-dot { background: #76b900; box-shadow: 0 0 8px #76b900; }
+.nvidia-transcript { min-height: 150px; line-height: 1.55; }
+.nvidia-generate-btn { margin-top: 4px; color: #080b05; }
+.nvidia-results {
+    padding: 20px;
+    border: 1px solid rgba(118,185,0,.22);
+    border-radius: var(--r-lg);
+    background: rgba(118,185,0,.045);
+}
+.nvidia-results-head { align-items: center; margin-bottom: 14px; }
+.nvidia-results-head h3 { margin: 3px 0 0; font-size: 1.05rem; }
+.ai-result-card {
+    padding: 14px;
+    margin-top: 10px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 11px;
+    background: rgba(5,8,8,.55);
+}
+.ai-result-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; color: #95d331; font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.copy-field-btn { border: 0; color: var(--text-muted); background: transparent; font: inherit; font-size: .66rem; font-weight: 700; text-transform: none; cursor: pointer; }
+.copy-field-btn:hover { color: #b7f45a; }
+.ai-result-text { color: #f1f5eb; font-size: .84rem; line-height: 1.55; }
+.pre-wrap { white-space: pre-wrap; }
+.hashtag-list { display: flex; flex-wrap: wrap; gap: 7px; color: #b7f45a; font-size: .78rem; }
+.hashtag-list span { padding: 5px 8px; border-radius: 7px; background: rgba(118,185,0,.09); }
+.nvidia-result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+@media (max-width: 1180px) {
+    .tabs-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+    .tabs-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tab-btn { justify-content: center; min-width: 0; }
+    .nvidia-key-row, .nvidia-section-head { flex-direction: column; align-items: stretch; }
+    .nvidia-connect-btn, .nvidia-disconnect-btn, .nvidia-verify-btn { width: 100%; }
+    .nvidia-source-row, .nvidia-result-grid { grid-template-columns: 1fr; }
+    .nvidia-hero { align-items: flex-start; }
+}
+
+/* ============================================================
+   MOBILE LAYOUT
+   ============================================================ */
+@media (max-width: 580px) {
+    body { padding: 10px; }
+
+    .app-container { gap: 14px; }
+
+    .app-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+
+    .logo { justify-content: center; }
+    .logo h1 { font-size: 1.55rem; }
+    .rocket-container { width: 42px; height: 42px; }
+    .logo .rocket { font-size: 1.8rem; }
+
+    .eyecatchy-header {
+        width: 100%;
+        font-size: 0.68rem;
+        line-height: 1.35;
+        padding: 7px 12px;
+    }
+
+    .hero-stats {
+        grid-template-columns: 1fr !important;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+
+    .stat-card { padding: 11px 14px; }
+
+    .controls-panel,
+    .media-library {
+        padding: 14px;
+        border-radius: var(--r-lg);
+    }
+
+    .tabs-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tab-btn { justify-content: center; }
+
+    .ratio-3col,
+    .filters-grid { grid-template-columns: 1fr !important; }
+
+    .video-card { flex-direction: column; }
+    .video-card-actions { width: 100%; }
+    .video-card-actions .action-btn { flex: 1; }
+
+    .voice-picker-wrap { flex-wrap: wrap; }
+    .preview-voice-btn { min-height: 40px; }
+
+    .toast {
+        width: calc(100% - 24px);
+        white-space: normal;
+        text-align: center;
+        padding: 12px 16px;
+    }
+}
+

@@ -16,6 +16,8 @@ const state = {
     statsFiles:   0,
     statsClips:   0,
     statsAudio:   0,
+    outputs:      [],
+    nvidiaMetadata: null,
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -24,11 +26,37 @@ const state = {
 function $(id)   { return document.getElementById(id); }
 function $q(sel) { return document.querySelector(sel); }
 
+function iconSvg(name) {
+    const paths = {
+        play: '<path d="M9 7v10l8-5-8-5Z" stroke-width="1.8" stroke-linejoin="round"/>',
+        download: '<path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+        video: '<path d="M4 7h16v11H4zM8 7l2-3h4l2 3M9.5 11l5 3-5 3v-6Z" stroke-width="1.7" stroke-linejoin="round"/>',
+        clip: '<path d="m8 4 8 16M16 4 8 20M5 8h14M5 16h14" stroke-width="1.7" stroke-linecap="round"/>',
+        empty: '<path d="M4 6.5h16v12H4zM8 6.5l2-3h4l2 3M10 11l5 2.5-5 2.5v-5Z" stroke-width="1.6" stroke-linejoin="round"/>'
+    };
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">${paths[name] || paths.video}</svg>`;
+}
+
 function showToast(msg, type = 'success', duration = 3500) {
     const t = $('toast');
     t.textContent = msg;
     t.className = `toast ${type} show`;
     setTimeout(() => t.classList.remove('show'), duration);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('The command timed out. Please try again or use a shorter video.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function animateCount(el, target) {
@@ -56,8 +84,10 @@ async function loadGallery() {
     const searchVal = ($('library-search')?.value || '').toLowerCase();
 
     try {
-        const res  = await fetch('/api/outputs');
+        const res  = await fetchWithTimeout('/api/outputs', {}, 15000);
         const data = await res.json();
+        state.outputs = data;
+        syncNvidiaVideoOptions(data);
 
         const filtered = searchVal
             ? data.filter(f => f.filename.toLowerCase().includes(searchVal))
@@ -66,8 +96,9 @@ async function loadGallery() {
         if (!filtered.length) {
             container.innerHTML = `
                 <div class="empty-library">
-                    <div class="library-empty-art">${searchVal ? '🔍' : '🎞️'}</div>
-                    <span>${searchVal ? 'No files match your search.' : 'No files exported yet.<br>Run a merge or clip operation to begin.'}</span>
+                    <div class="library-empty-art">${iconSvg('empty')}</div>
+                    <strong>${searchVal ? 'No matching exports' : 'No exports yet'}</strong>
+                    <span>${searchVal ? 'Try a different filename.' : 'Your completed videos and clips will appear here.'}</span>
                 </div>`;
             animateCount($('stat-files'), 0);
             return;
@@ -78,16 +109,17 @@ async function loadGallery() {
 
         container.innerHTML = filtered.map(file => {
             const isClip  = file.filename.includes('clip_');
-            const icon    = isClip ? '✂️' : '🎬';
+            const icon    = isClip ? iconSvg('clip') : iconSvg('video');
+            const metadata = [file.duration, file.size].filter(Boolean).join(' · ');
             return `
             <div class="video-card" data-fn="${file.filename}">
                 <div class="video-card-info">
                     <span class="video-card-title">${icon} ${file.filename}</span>
-                    <span class="video-card-meta">${file.duration} &nbsp;|&nbsp; ${file.size}</span>
+                    <span class="video-card-meta">${metadata}</span>
                 </div>
                 <div class="video-card-actions">
-                    <button class="action-btn play-action" data-fn="${file.filename}">▶ Play</button>
-                    <button class="action-btn download-action" data-fn="${file.filename}">↓ Save</button>
+                    <button class="action-btn play-action" data-fn="${file.filename}">${iconSvg('play')}<span>Play</span></button>
+                    <button class="action-btn download-action" data-fn="${file.filename}">${iconSvg('download')}<span>Save</span></button>
                 </div>
             </div>`;
         }).join('');
@@ -114,15 +146,15 @@ async function loadGallery() {
 // CLEAR LIBRARY
 // ─────────────────────────────────────────────────────────────────
 async function clearLibrary() {
-    const confirmed = confirm('🗑️ Delete ALL exported files from disk?\n\nThis cannot be undone.');
+    const confirmed = confirm('Delete all exported files from disk?\n\nThis cannot be undone.');
     if (!confirmed) return;
 
     const btn = $('clear-library-btn');
-    btn.textContent = '⏳ Clearing…';
+    btn.textContent = 'Clearing…';
     btn.disabled = true;
 
     try {
-        const res  = await fetch('/api/clear-library', { method: 'POST' });
+        const res  = await fetchWithTimeout('/api/clear-library', { method: 'POST' }, 30000);
         const data = await res.json();
         showToast(`✅ Cleared ${data.deleted} file${data.deleted !== 1 ? 's' : ''} from library`, 'success');
         animateCount($('stat-files'), 0);
@@ -130,7 +162,7 @@ async function clearLibrary() {
     } catch (e) {
         showToast('❌ Failed to clear library', 'error');
     } finally {
-        btn.textContent = '🗑 Clear All';
+        btn.textContent = 'Clear all';
         btn.disabled = false;
     }
 }
@@ -139,7 +171,7 @@ async function clearLibrary() {
 // VIDEO MODAL
 // ─────────────────────────────────────────────────────────────────
 function openVideoModal(filename) {
-    $('modal-title').textContent = `▶ ${filename}`;
+    $('modal-title').textContent = filename;
     $('modal-player').src = `/api/outputs/${filename}`;
     $('video-modal').classList.add('active');
     $('modal-player').play();
@@ -155,7 +187,7 @@ function closeVideoModal() {
 // ─────────────────────────────────────────────────────────────────
 async function loadVoices() {
     try {
-        const res  = await fetch('/api/voices');
+        const res  = await fetchWithTimeout('/api/voices', {}, 15000);
         state.voiceData = await res.json();
         updateVoiceDropdown(state.currentLang, 'tts');
         updateVoiceDropdown(state.currentLang, 'ai');
@@ -351,7 +383,7 @@ async function previewVoice(prefix = 'tts') {
         fd.append('rate',  rate);
         fd.append('pitch', pitch);
 
-        const res = await fetch('/api/preview-voice', { method: 'POST', body: fd });
+        const res = await fetchWithTimeout('/api/preview-voice', { method: 'POST', body: fd }, 90000);
         if (!res.ok) throw new Error('Server error');
 
         const blob = await res.blob();
@@ -375,12 +407,62 @@ async function previewVoice(prefix = 'tts') {
 function initTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+                b.tabIndex = -1;
+            });
+            document.querySelectorAll('.tab-content').forEach(c => {
+                c.classList.remove('active');
+                c.hidden = true;
+            });
             btn.classList.add('active');
-            $(btn.dataset.tab)?.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
+            btn.tabIndex = 0;
+            const panel = $(btn.dataset.tab);
+            panel?.classList.add('active');
+            if (panel) panel.hidden = false;
         });
     });
+
+    const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+    tabs.forEach((tab, index) => {
+        tab.tabIndex = tab.classList.contains('active') ? 0 : -1;
+        const panel = $(tab.dataset.tab);
+        if (panel) panel.hidden = !tab.classList.contains('active');
+        tab.addEventListener('keydown', event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            let next = index;
+            if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+            if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = tabs.length - 1;
+            tabs[next].focus();
+            tabs[next].click();
+        });
+    });
+}
+
+function syncNvidiaVideoOptions(files = state.outputs) {
+    const select = $('nvidia-video-select');
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = '';
+    if (!files.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No exported videos found';
+        select.appendChild(option);
+        return;
+    }
+    files.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file.filename;
+        option.textContent = `${file.filename}${file.size ? ` · ${file.size}` : ''}`;
+        select.appendChild(option);
+    });
+    if (files.some(file => file.filename === previous)) select.value = previous;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -448,24 +530,46 @@ function startProgress(fillId, pctId, stepId, steps, onDone) {
     const fill = $(fillId);
     const pct  = $(pctId);
     const step = $(stepId);
-    if (!fill) return null;
+    if (!fill || !pct || !step || !steps.length) return null;
 
     let idx = 0;
     let cur = 0;
+    let stepStart = 0;
+    let elapsed = 0;
+    let waitingSince = null;
 
+    step.textContent = steps[0].label;
+
+    // Advance every stage with one timer. Creating a new inner timer from a
+    // zero-delay interval caused hundreds of overlapping progress updates.
     const iv = setInterval(() => {
-        if (idx >= steps.length) { clearInterval(iv); onDone?.(); return; }
-        const { pct: target, label, dur } = steps[idx];
-        step.textContent = label;
+        const currentStep = steps[idx];
+        if (!currentStep) {
+            if (waitingSince === null) {
+                waitingSince = Date.now();
+                onDone?.();
+            }
+            const waitingSeconds = Math.floor((Date.now() - waitingSince) / 1000);
+            const minutes = Math.floor(waitingSeconds / 60);
+            const seconds = String(waitingSeconds % 60).padStart(2, '0');
+            pct.textContent = `Working ${minutes}:${seconds}`;
+            step.textContent = 'Server is still processing — long videos can take several minutes…';
+            return;
+        }
 
-        const speed = (target - cur) / (dur / 120);
-        const inner = setInterval(() => {
-            cur = Math.min(cur + speed, target);
-            fill.style.width = `${cur}%`;
-            pct.textContent  = `${Math.round(cur)}%`;
-            if (cur >= target) { clearInterval(inner); idx++; }
-        }, 120);
-    }, 0);
+        elapsed += 120;
+        const fraction = Math.min(elapsed / currentStep.dur, 1);
+        cur = stepStart + ((currentStep.pct - stepStart) * fraction);
+        fill.style.width = `${cur}%`;
+        pct.textContent  = `${Math.round(cur)}%`;
+
+        if (fraction >= 1) {
+            stepStart = currentStep.pct;
+            elapsed = 0;
+            idx++;
+            if (steps[idx]) step.textContent = steps[idx].label;
+        }
+    }, 120);
 
     return iv;
 }
@@ -501,6 +605,8 @@ function initMergeForm() {
         fd.set('rate',  rateV  >= 0 ? `+${rateV}%`   : `${rateV}%`);
         fd.set('pitch', pitchV >= 0 ? `+${pitchV}Hz`  : `${pitchV}Hz`);
         fd.set('style', state.currentStyle);
+        // Checkboxes don't submit when unchecked — send the real state explicitly.
+        fd.set('trim_audio', $q('#merger-tab input[name="trim_audio"]')?.checked ? 'true' : 'false');
 
         const btn = $('merge-submit-btn');
         btn.disabled = true; btn.classList.add('loading');
@@ -513,12 +619,13 @@ function initMergeForm() {
             { pct: 90, label: '🎵 Mixing audio tracks…',       dur: 1200 },
             { pct: 99, label: '📦 Finalising output…',         dur: 800  },
         ];
-        startProgress('merge-fill', 'merge-pct', 'merge-step', steps);
+        const progressTimer = startProgress('merge-fill', 'merge-pct', 'merge-step', steps);
 
         try {
-            const res  = await fetch('/api/merge', { method: 'POST', body: fd });
+            const res  = await fetchWithTimeout('/api/merge', { method: 'POST', body: fd }, 1800000);
             const data = await res.json();
 
+            if (progressTimer) clearInterval(progressTimer);
             $('merge-fill').style.width = '100%';
             $('merge-pct').textContent  = '100%';
             $('merge-step').textContent = '✅ Done!';
@@ -532,8 +639,11 @@ function initMergeForm() {
                 showToast(`❌ ${data.error}`, 'error', 6000);
             }
         } catch (err) {
-            showToast('❌ Network error — check server', 'error');
+            $('merge-pct').textContent = 'Error';
+            $('merge-step').textContent = 'Processing stopped';
+            showToast(err.message || 'Network error — check server', 'error');
         } finally {
+            if (progressTimer) clearInterval(progressTimer);
             btn.disabled = false; btn.classList.remove('loading');
             setTimeout(() => hideProgress('merge-progress'), 2000);
         }
@@ -547,10 +657,18 @@ function initClipForm() {
     const form = $('clip-form');
     if (!form) return;
 
+    const audioMode = $('audio-mode');
+    const replacementAudio = $('replacement-audio');
+    audioMode?.addEventListener('change', () => {
+        const needsUpload = audioMode.value === 'upload';
+        replacementAudio.disabled = !needsUpload;
+        replacementAudio.required = needsUpload;
+    });
+
     form.addEventListener('submit', async e => {
         e.preventDefault();
         const url = $('url')?.value.trim();
-        if (!url || !url.includes('youtube')) {
+        if (!url || !/(youtube\.com|youtu\.be)/i.test(url)) {
             showToast('⚠️ Please enter a valid YouTube URL', 'error'); return;
         }
 
@@ -561,32 +679,42 @@ function initClipForm() {
         const steps = [
             { pct: 20, label: '⬇️ Downloading video…',        dur: 3000 },
             { pct: 50, label: '✂️ Slicing into clips…',         dur: 2500 },
-            { pct: 75, label: '🎨 Applying safety filters…',   dur: 2000 },
+            { pct: 75, label: 'Applying creative adjustments…', dur: 2000 },
             { pct: 90, label: '💾 Saving clips to library…',   dur: 1200 },
-            { pct: 99, label: '📦 Cleaning up temp files…',    dur: 600  },
+            { pct: 92, label: '📦 Finalising server output…',  dur: 600  },
         ];
-        startProgress('clip-fill', 'clip-pct', 'clip-step', steps);
+        const progressTimer = startProgress('clip-fill', 'clip-pct', 'clip-step', steps);
 
         try {
             const fd  = new FormData(form);
-            const res = await fetch('/api/clip', { method: 'POST', body: fd });
+            // Checkboxes don't submit when unchecked — send the real state so
+            // users can actually disable the mirror / zoom filters.
+            fd.set('mirror', $q('#clipper-tab input[name="mirror"]')?.checked ? 'true' : 'false');
+            fd.set('zoom',   $q('#clipper-tab input[name="zoom"]')?.checked ? 'true' : 'false');
+            const res = await fetchWithTimeout('/api/clip', { method: 'POST', body: fd }, 900000);
             const data = await res.json();
 
-            $('clip-fill').style.width = '100%';
-            $('clip-pct').textContent  = '100%';
-            $('clip-step').textContent = '✅ Done!';
+            if (progressTimer) clearInterval(progressTimer);
 
             if (data.success) {
+                $('clip-fill').style.width = '100%';
+                $('clip-pct').textContent  = '100%';
+                $('clip-step').textContent = '✅ Done!';
                 showToast(`✅ ${data.message}`, 'success', 5000);
                 state.statsClips += data.filenames?.length || 0;
                 animateCount($('stat-clips'), state.statsClips);
                 await loadGallery();
             } else {
+                $('clip-pct').textContent  = 'Error';
+                $('clip-step').textContent = '❌ Processing failed';
                 showToast(`❌ ${data.error}`, 'error', 7000);
             }
         } catch (err) {
-            showToast('❌ Network error — check server logs', 'error');
+            $('clip-pct').textContent  = 'Error';
+            $('clip-step').textContent = '❌ Connection failed';
+            showToast(err.message || 'Network error — check server logs', 'error');
         } finally {
+            if (progressTimer) clearInterval(progressTimer);
             btn.disabled = false; btn.classList.remove('loading');
             setTimeout(() => hideProgress('clip-progress'), 2000);
         }
@@ -614,6 +742,8 @@ function initAIVideoForm() {
         fd.set('rate',  rateV  >= 0 ? `+${rateV}%`   : `${rateV}%`);
         fd.set('pitch', pitchV >= 0 ? `+${pitchV}Hz`  : `${pitchV}Hz`);
         fd.set('style', state.aiCurrentStyle || '');
+        // Checkboxes don't submit when unchecked — send the real state explicitly.
+        fd.set('trim_audio', $q('#ai-creator-tab input[name="trim_audio"]')?.checked ? 'true' : 'false');
 
         const btn = $('ai-submit-btn');
         btn.disabled = true;
@@ -627,12 +757,13 @@ function initAIVideoForm() {
             { pct: 85, label: '🪄 Rendering dynamic slides…',  dur: 4000 },
             { pct: 98, label: '📦 Mixing & assembling video…', dur: 2000 },
         ];
-        startProgress('ai-fill', 'ai-pct', 'ai-step', steps);
+        const progressTimer = startProgress('ai-fill', 'ai-pct', 'ai-step', steps);
 
         try {
-            const res = await fetch('/api/generate-video', { method: 'POST', body: fd });
+            const res = await fetchWithTimeout('/api/generate-video', { method: 'POST', body: fd }, 1200000);
             const data = await res.json();
 
+            if (progressTimer) clearInterval(progressTimer);
             $('ai-fill').style.width = '100%';
             $('ai-pct').textContent  = '100%';
             $('ai-step').textContent = '✅ Done!';
@@ -644,13 +775,210 @@ function initAIVideoForm() {
                 showToast(`❌ ${data.error}`, 'error', 7000);
             }
         } catch (err) {
-            showToast('❌ Network error — check server logs', 'error');
+            $('ai-pct').textContent = 'Error';
+            $('ai-step').textContent = 'Generation stopped';
+            showToast(err.message || 'Network error — check server logs', 'error');
         } finally {
+            if (progressTimer) clearInterval(progressTimer);
             btn.disabled = false;
             btn.classList.remove('loading');
             setTimeout(() => hideProgress('ai-progress'), 2000);
         }
     });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// NVIDIA NIM ASSISTANT
+// ─────────────────────────────────────────────────────────────────
+async function readJsonResponse(response) {
+    try { return await response.json(); }
+    catch (_) { return { success: false, error: `Server error (HTTP ${response.status})` }; }
+}
+
+function setNvidiaConnection(connected) {
+    const status = $('nvidia-status');
+    if (status) {
+        status.classList.toggle('connected', connected);
+        status.innerHTML = `<span class="connection-dot"></span> ${connected ? 'Connected' : 'Not connected'}`;
+    }
+    if ($('nvidia-disconnect-btn')) $('nvidia-disconnect-btn').hidden = !connected;
+    if ($('nvidia-verify-btn')) $('nvidia-verify-btn').hidden = !connected;
+    if ($('nvidia-connect-btn')) $('nvidia-connect-btn').hidden = connected;
+    if ($('nvidia-api-key')) {
+        $('nvidia-api-key').disabled = connected;
+        $('nvidia-api-key').placeholder = connected ? 'Saved securely with Windows' : 'nvapi-••••••••••••••••';
+    }
+}
+
+async function loadNvidiaStatus() {
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/status', {}, 10000);
+        const data = await readJsonResponse(response);
+        setNvidiaConnection(Boolean(data.configured));
+    } catch (_) {
+        setNvidiaConnection(false);
+    }
+}
+
+function setButtonLoading(button, loading, label) {
+    if (!button) return;
+    button.disabled = loading;
+    button.classList.toggle('loading', loading);
+    const text = button.querySelector('.btn-text');
+    if (text && label) text.textContent = label;
+}
+
+async function connectNvidia() {
+    const input = $('nvidia-api-key');
+    const button = $('nvidia-connect-btn');
+    const key = input?.value.trim() || '';
+    if (!key) { showToast('Enter your NVIDIA API key first.', 'error'); return; }
+    setButtonLoading(button, true, 'Saving securely…');
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: key }),
+        }, 20000);
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.error || 'Could not connect NVIDIA.');
+        input.value = '';
+        setNvidiaConnection(true);
+        showToast(data.message || 'NVIDIA AI key saved securely.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error', 6000);
+    } finally {
+        setButtonLoading(button, false, 'Connect securely');
+    }
+}
+
+async function verifyNvidia() {
+    const button = $('nvidia-verify-btn');
+    button.disabled = true;
+    button.textContent = 'Testing…';
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/verify', { method: 'POST' }, 60000);
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.error || 'NVIDIA key test failed.');
+        showToast('NVIDIA key verified successfully.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error', 7000);
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Test key';
+    }
+}
+
+async function disconnectNvidia() {
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/disconnect', { method: 'POST' }, 15000);
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.error || 'Could not disconnect NVIDIA.');
+        setNvidiaConnection(false);
+        showToast('Saved NVIDIA key removed.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function transcribeWithNvidia() {
+    const filename = $('nvidia-video-select')?.value || '';
+    if (!filename) { showToast('Create or select an exported video first.', 'error'); return; }
+    const button = $('nvidia-transcribe-btn');
+    const status = $('nvidia-transcribe-status');
+    button.disabled = true;
+    status.hidden = false;
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename, language: $('nvidia-asr-language')?.value || 'en-US' }),
+        }, 360000);
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.error || 'Transcription failed.');
+        $('nvidia-transcript').value = data.transcript;
+        showToast('Transcript generated with NVIDIA Parakeet.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error', 7000);
+    } finally {
+        button.disabled = false;
+        status.hidden = true;
+    }
+}
+
+function renderNvidiaMetadata(metadata) {
+    state.nvidiaMetadata = metadata;
+    $('nvidia-result-title').textContent = metadata.title || '';
+    $('nvidia-result-description').textContent = metadata.description || '';
+    $('nvidia-result-hook').textContent = metadata.hook || '';
+    $('nvidia-result-comment').textContent = metadata.pinned_comment || '';
+    const hashtags = $('nvidia-result-hashtags');
+    hashtags.innerHTML = '';
+    (metadata.hashtags || []).forEach(tag => {
+        const span = document.createElement('span');
+        span.textContent = tag.startsWith('#') ? tag : `#${tag}`;
+        hashtags.appendChild(span);
+    });
+    $('nvidia-results').hidden = false;
+    $('nvidia-results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function generateNvidiaMetadata() {
+    const transcript = $('nvidia-transcript')?.value.trim() || '';
+    if (!transcript) { showToast('Generate a transcript or enter the video topic first.', 'error'); return; }
+    const button = $('nvidia-generate-btn');
+    setButtonLoading(button, true, 'NVIDIA is writing…');
+    try {
+        const response = await fetchWithTimeout('/api/nvidia/generate-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transcript,
+                language: $('nvidia-output-language')?.value || 'English',
+                tone: $('nvidia-tone')?.value || 'High-energy',
+            }),
+        }, 180000);
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.error || 'Metadata generation failed.');
+        renderNvidiaMetadata(data.metadata);
+        showToast('Your Shorts package is ready.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error', 7000);
+    } finally {
+        setButtonLoading(button, false, 'Generate with NVIDIA AI');
+    }
+}
+
+async function copyText(value) {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    showToast('Copied to clipboard.', 'success', 1800);
+}
+
+function initNvidiaAssistant() {
+    $('nvidia-connect-btn')?.addEventListener('click', connectNvidia);
+    $('nvidia-verify-btn')?.addEventListener('click', verifyNvidia);
+    $('nvidia-disconnect-btn')?.addEventListener('click', disconnectNvidia);
+    $('nvidia-transcribe-btn')?.addEventListener('click', transcribeWithNvidia);
+    $('nvidia-generate-btn')?.addEventListener('click', generateNvidiaMetadata);
+    $('nvidia-key-toggle')?.addEventListener('click', event => {
+        const input = $('nvidia-api-key');
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        event.currentTarget.textContent = show ? 'Hide' : 'Show';
+        event.currentTarget.setAttribute('aria-label', show ? 'Hide API key' : 'Show API key');
+    });
+    document.querySelectorAll('.copy-field-btn').forEach(button => {
+        button.addEventListener('click', () => copyText($(button.dataset.copy)?.textContent.trim() || ''));
+    });
+    $('nvidia-copy-all')?.addEventListener('click', () => {
+        const item = state.nvidiaMetadata;
+        if (!item) return;
+        const tags = (item.hashtags || []).map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+        copyText(`${item.title}\n\n${item.description}\n\n${tags}\n\nHook: ${item.hook}\n\nPinned comment: ${item.pinned_comment}`);
+    });
+    loadNvidiaStatus();
+    syncNvidiaVideoOptions();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -671,6 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initMergeForm();
     initClipForm();
     initAIVideoForm();
+    initNvidiaAssistant();
 
     // Video modal
     $('modal-close')?.addEventListener('click', closeVideoModal);
@@ -694,19 +1023,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Load async data without blocking UI click handlers
     (async () => {
-        try {
-            await loadVoices();
-            buildAgeGrid('tts');
-            buildAgeGrid('ai');
-        } catch (err) {
-            console.error("Error loading voices:", err);
-        }
-
-        try {
-            await loadGallery();
-        } catch (err) {
-            console.error("Error loading gallery:", err);
-        }
+        // Voice metadata and existing exports are independent. Loading both in
+        // parallel keeps the library from looking empty on slower voice calls.
+        await Promise.all([
+            loadVoices().then(() => {
+                buildAgeGrid('tts');
+                buildAgeGrid('ai');
+            }).catch(err => console.error('Error loading voices:', err)),
+            loadGallery().catch(err => console.error('Error loading gallery:', err)),
+        ]);
 
         // Voice interactions (TTS Panel)
         $('tts-language')?.addEventListener('change', e => {

@@ -41,3 +41,8 @@ TEMP_MPY*
 
 # Logs
 *.log
+
+# Windows application build artifacts
+build/
+dist/
+windows/*.ico
