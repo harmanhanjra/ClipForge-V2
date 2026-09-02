@@ -3,6 +3,7 @@ import sys
 import uuid
 import subprocess
 import shutil
+from urllib.parse import urlparse
 import PIL.Image
 
 # Monkeypatch PIL.Image.ANTIALIAS for compatibility with moviepy and newer Pillow versions
@@ -31,6 +32,17 @@ RESOURCE_FOLDER = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__fil
 STATIC_FOLDER = os.path.join(RESOURCE_FOLDER, 'static')
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='')
+app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('CLIPFORGE_MAX_UPLOAD_BYTES', str(1024 * 1024 * 1024)))
+
+ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.m4v'}
+ALLOWED_YOUTUBE_HOSTS = {'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'}
+
+def is_allowed_youtube_url(value):
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
+    return parsed.scheme == 'https' and (parsed.hostname or '').lower() in ALLOWED_YOUTUBE_HOSTS
 
 # Configuration
 PROJECT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -249,7 +261,10 @@ def merge_videos():
         
         # Save video uploads
         for idx, file in enumerate(uploaded_videos):
-            filename = f"{job_id}_video_{idx}.mp4"
+            extension = os.path.splitext(file.filename or '')[1].lower()
+            if extension not in ALLOWED_VIDEO_EXTENSIONS:
+                return jsonify({'success': False, 'error': f'Unsupported video type: {extension or "unknown"}'}), 400
+            filename = f"{job_id}_video_{idx}{extension}"
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
             video_paths.append(filepath)
@@ -343,6 +358,8 @@ def clip_youtube_video():
         url = request.form.get('url')
         if not url:
             return jsonify({'success': False, 'error': 'YouTube URL is required.'}), 400
+        if not is_allowed_youtube_url(url):
+            return jsonify({'success': False, 'error': 'Only HTTPS YouTube URLs are allowed.'}), 400
         job_id = str(uuid.uuid4())
             
         mode = request.form.get('mode', 'auto') # 'auto' or 'timestamps'
@@ -400,8 +417,7 @@ def clip_youtube_video():
             "--extractor-args", "youtube:player_client=ios,android,mweb,web",
             # Geo-bypass
             "--geo-bypass",
-            # SSL resilience
-            "--no-check-certificates",
+            # Network timeout
             "--socket-timeout", "60",
             # Retry logic
             "--retries", "10",
