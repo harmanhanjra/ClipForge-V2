@@ -112,6 +112,26 @@ class FeatureRouteSmokeTests(unittest.TestCase):
         self.assertEqual(options["audio_mode"], "upload")
         self.assertTrue(options["replacement_audio_path"].endswith(".mp3"))
 
+    def test_rejects_non_youtube_download_url(self):
+        response = self.client.post(
+            "/api/clip",
+            data={"url": "https://example.com/video.mp4", "mode": "auto"},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only HTTPS YouTube URLs", response.get_json()["error"])
+
+    @patch.object(clipforge_app, "concatenate_clips")
+    def test_rejects_unsupported_video_upload(self, concatenate):
+        response = self.client.post(
+            "/api/merge",
+            data={"videos": (io.BytesIO(b"not-video"), "payload.exe")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported video type", response.get_json()["error"])
+        concatenate.assert_not_called()
+
     @patch.object(clipforge_app, "generate_ai_video")
     def test_ai_video_creator(self, generate):
         generate.return_value = {"success": True, "duration": 3.0, "sentences_count": 1}
