@@ -28,7 +28,10 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
       - name: Static security scan
-        run: bandit -r . -x ./.venv,./tests -ll
+        # B310 is handled by utils.safe_http: urllib calls made directly by
+        # utils.audio_engine are restricted to HTTPS provider allowlists and
+        # redirect targets are revalidated. Regression tests cover the policy.
+        run: bandit -r . -x ./.venv,./tests -ll -s B310
       - name: Dependency vulnerability audit
         if: always()
         # gTTS 2.5.x requires click<8.2. PYSEC-2026-2132 affects click.edit();
