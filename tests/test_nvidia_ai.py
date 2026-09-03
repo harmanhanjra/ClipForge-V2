@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,7 @@ from utils.nvidia_ai import (
 
 
 class NvidiaAIHelpersTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "DPAPI secure storage is Windows-only")
     def test_windows_dpapi_round_trip(self):
         encrypted = _protect("nvapi-test-secret")
         self.assertNotIn("nvapi-test-secret", encrypted)
