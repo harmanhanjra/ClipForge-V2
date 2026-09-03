@@ -30,4 +30,5 @@ jobs:
       - name: Static security scan
         run: bandit -r . -x ./.venv,./tests -ll
       - name: Dependency vulnerability audit
+        if: always()
         run: python -m pip_audit -r requirements.txt
